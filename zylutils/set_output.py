@@ -440,12 +440,41 @@ def getOutput_op(op, mopac, dinfo, pngname):
     fig.savefig(pngname)
     plt.close()
 
+def getOutput_beta(ifreq, im, pngname):
+    """
+    calculate beta index
+    ifreq = index for wavelength/frequency. should always be greater than 0. 
+        the frequency decrease in increasing index
+    """
+    if im.nwav == 1:
+        raise ValueError('image should be multiwavelength for beta index calculations')
+    dum_image = im.deepcopy()
+    dalognu = np.log(dum_image.freq[ifreq-1]) - np.log(dum_image.freq[ifreq])
+    if dum_image.stokes:
+        dalogI = np.log(dum_image.image[:,:,0,ifreq-1]) - np.log(dum_image.image[:,:,0,ifreq])
+    else:
+        dalogI = np.log(dum_image.image[:,:,ifreq-1]) - np.log(dum_image.image[:,:,ifreq])
+
+    beta = dalogI / dalognu - 2.
+
+    fig = plt.figure()
+    ax = plt.gca()
+    pc = ax.pcolormesh(dum_image.x/natconst.au, dum_image.y/natconst.au, 
+        beta.T)
+    cbar = plt.colorbar(pc)
+    ax.set_xlabel('X [AU]')
+    ax.set_ylabel('Y [AU]')
+    ax.set_title('Beta Index: %d - %d GHz'%(dum_image.freq[ifreq-1]/1e9, dum_image.freq[ifreq]/1e9))
+    fig.savefig(pngname)
+    plt.close()
+
 # ------------------------------------------------------------
 def commence(rundir, polunitlen=-2, dis=400, polmax=None, 
         dooutput_op=1, 
         dooutput_im=1, dooutput_xy=0, dooutput_minor=0, 
         dooutput_stokes=0,
         dooutput_conv=0, fwhm=None, pa=[[0]], 
+        dooutput_beta=0, 
         dooutput_fits=0, bwidthmhz=2000., coord='03h10m05s -10d05m30s',
         dooutput_los=1, dokern=False
         ):
@@ -567,6 +596,10 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
             if dooutput_los:
                 pngname = rundir + '/out_los.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
                 getOutput_los(camwav[ifreq], fkabs, fksca, losdens, lostemp, pngname)
+
+            if (dooutput_beta) and (ifreq > 0):
+                pngname = rundir + '/out_beta.i%d.f%dx%d.png'%(imageinc[ii], camwav[ifreq], camwav[ifreq-1])
+                getOutput_beta(ifreq, dis, pngname)
 
             if dooutput_fits:
             # output to fits file
