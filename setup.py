@@ -1523,7 +1523,8 @@ def writeLinesInp(ppar=None):
     print('Writing lines.inp')
     with open('lines.inp', 'w') as wfile:
         # File format
-        wfile.write("%d\n" % ppar['lines_mode'])
+#        wfile.write("%d\n" % ppar['lines_mode'])
+        wfile.write("%d\n" % 2)
         # Nr of gas species
         wfile.write("%d\n" % n1)
         # Gas species name and database type
