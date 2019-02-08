@@ -1248,7 +1248,7 @@ class radmc3dData(object):
                         fname = fdir + '/' + fname
 
             print('Writing ' + fname)
-            tot_gas = self.getGasMass(rhogas=True)
+#            tot_gas = self.getGasMass(rhogas=True)
             if octree:
                 self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.ndens_mol), fname=fname, binary=binary,
                                         octree=True)
