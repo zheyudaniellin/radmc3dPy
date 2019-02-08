@@ -35,6 +35,7 @@ import traceback
 
 from .. import dustopac
 from .. import natconst
+from . import DiskEqs
 import pdb
 
 try:
@@ -50,7 +51,7 @@ def getModelDesc():
     """Provides a brief description of the model
     """
 
-    return "Example model template"
+    return "disk with multiple layers"
            
 
 def getDefaultParams():
@@ -91,6 +92,17 @@ def getDefaultParams():
         ['Rt', '100.*au', 'radius for scale height'],
         ['Ht', '12.*au', 'Scale height'],
         ['qheight', '1.15', 'power index for scale height'],
+        ['gasspec_vturb', '0.2e5', 'Microturbulent line width'],
+
+        # gas species
+        ['gasspec_mol_name', "['co']", 'name of molecule'],
+        ['gasspec_mol_abun', '[1e-4]', 'mass abundance '],
+        ['gasspec_mol_dbase_type', "['leiden']", ''],
+        ['gasspec_mol_freezeout_dfact', '[1e-3]', 
+         'Factor by which the molecular abundance should be decreased in the freeze-out zone'],
+        ['mol_freeze_Ht', '[24*au]', 'Height at Rt, with index=qheight, for freeze out to happen'], 
+        ['mol_freeze_del_hfrac', '0.2', 'Gaussian taper for freeze-out. del H = h * hfrac'],
+        ['mol_snowR', '[20*au]', 'Radius when freeze out begins to happen'], 
 
         # dust density related
         # should be in number of dust species. increase from small to large
@@ -199,16 +211,56 @@ def getGasAbundance(grid=None, ppar=None, ispec=''):
     -------
     Returns the abundance as an ndarray
     """
+
+    # translate ppar argument to arguments used here
+    mol_name = ppar['gasspec_mol_name']
+    mol_abun = ppar['gasspec_mol_abun']
+    dfact = ppar['gasspec_mol_freezeout_dfact']
+    freeze_Ht = ppar['mol_freeze_Ht']
+    Rt = ppar['Rt']
+    qheight = ppar['qheight']
+    del_hfrac = ppar['mol_freeze_del_hfrac'] # not in effect yet
+    snowR = ppar['mol_snowR']
+
+    # grid
+    mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
+    if ppar['crd_sys'] == 'sph':
+        rr = mesh[0]
+        tt = mesh[1]
+        pp = mesh[2]
+        xx = rr * np.sin(tt) * np.sin(pp)
+        yy = rr * np.sin(tt) * np.cos(pp)
+        zz = rr * np.cos(tt)
+        cyrr = np.sqrt(xx**2. + yy**2)
+    elif ppar['crd_sys'] == 'car':
+        xx = mesh[0]
+        yy = mesh[1]
+        zz = mesh[2]
+        rr = np.sqrt(xx**2 + yy**2 + zz**2)
+        cyrr = np.sqrt(xx**2. + yy**2.)
+    else:
+        raise ValueError('crd_sys not specified in ppar')
+
+    # calculations
+    nspec = len(mol_name)
    
-    gasabun = -1
-    if ppar['gasspec_mol_name'].__contains__(ispec):
-        ind = ppar['gasspec_mol_name'].index(ispec)
-        gasabun[:, :, :] = ppar['gasspec_mol_abun'][ind]
- 
-    elif ppar['gasspec_colpart_name'].__contains__(ispec):
-        gasabun = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64) 
-        ind = ppar['gasspec_colpart_name'].index(ispec)
-        gasabun[:, :, :] = ppar['gasspec_colpart_abun'][ind]
+    gasabun = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64)
+    if mol_name.__contains__(ispec):
+        ind = mol_name.index(ispec)
+
+        gasabun[:, :, :] = mol_abun[ind]
+
+        # freeze out beyond snow line
+        snow_reg = cyrr > snowR[ind]
+
+        # freeze out based on height
+        hh = freeze_Ht[ind] * (cyrr / Rt)**(qheight)
+        Ht_reg = abs(zz) < hh
+
+        # take the union
+        reg = snow_reg & Ht_reg
+        gasabun[reg] = mol_abun[ind] * dfact[ind]
+
     else:
         raise ValueError(' The abundance of "'+ispec+'" is not specified in the parameter file')
    
@@ -367,14 +419,41 @@ def getVelocity(grid=None, ppar=None):
             An instance of the radmc3dGrid class containing the spatial and wavelength grid
     
     ppar : dictionary
-            Dictionary containing all parameters of the model 
+            Dictionary containing all parameters of the model. 
+           Needs: ppar['mstar']
     
     Returns
     -------
     Returns the turbulent velocity in cm/s
     """
+    mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
+    if ppar['crd_sys'] == 'sph':
+        rr = mesh[0]
+        tt = mesh[1]
+        pp = mesh[2]
+        xx = rr * np.sin(tt) * np.sin(pp)
+        yy = rr * np.sin(tt) * np.cos(pp)
+        zz = rr * np.cos(tt)
+        cyrr = np.sqrt(xx**2. + yy**2)
+    elif ppar['crd_sys'] == 'car':
+        xx = mesh[0]
+        yy = mesh[1]
+        zz = mesh[2]
+        rr = np.sqrt(xx**2 + yy**2 + zz**2)
+        cyrr = np.sqrt(xx**2. + yy**2.)
+    else:
+        raise ValueError('crd_sys not specified in ppar')
 
+    # translate ppar into needed arguments
+    mstar = ppar['mstar'][0]
+
+    # calculate velocities
     vel = np.zeros([grid.nx, grid.ny, grid.nz, 3], dtype=np.float64)
+
+    vphi = np.sqrt(natconst.gg * mstar / cyrr) * (1. + (zz / cyrr)**2)**(-0.75)
+
+    vel[:,:,:,2] = vphi
+
     return vel
 
 def getDustAlignment(grid=None, ppar=None):
@@ -382,92 +461,20 @@ def getDustAlignment(grid=None, ppar=None):
 
     Parameters
     ----------
-        grid : radmc3dGrid
+    grid : radmc3dGrid
             An instance of the radmc3dGrid class containing the spatial and wavelength grid
     
     ppar : dictionary
             Dictionary containing all parameters of the model.
-           altype = '0': all zeros
-                  = 'x': aligned to x direction. or 'y', 'z'
-                  = 'toroidal' : toroidal alignment
-                  = 'poloidal' : poloidal alignment
-                  = 'radial'   : radial alignment, in spherical coordinates
-                  = 'cylradial': radial in cylindrical coordinates
+    altype : string
+             See eqDustAlignment in DiskEqs.py
     
     Returns
     -------
     Returns the dust grain alignment
     """
-    # check inputs in ppar
-    if 'crd_sys' not in ppar:
-        raise ValueError('crd_sys is not in ppar')
-    else:
-        crd_sys = ppar['crd_sys']
-    if 'altype' not in ppar:
-        altype = '0'
-    else:
-        altype = ppar['altype']
 
-    # meshgrid for space
-    mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
-
-    alvec = np.zeros([grid.nx, grid.ny, grid.nz, 3], dtype=np.float64)
-    if crd_sys is 'car':
-        xx = mesh[0]
-        yy = mesh[1]
-        zz = mesh[2]
-        rr = np.sqrt(xx**2 + yy**2 + zz**2)
-    elif crd_sys is 'sph':
-        rr = mesh[0]
-        tt = mesh[1]
-        pp = mesh[2]
-        xx = rr * np.sin(tt) * np.cos(pp)
-        yy = rr * np.sin(tt) * np.sin(pp)
-        zz = rr * np.cos(tt)
-    else:
-        raise ValueError('incorrect input for crd_sys')
-    # different modes for alignment
-    # x
-    if altype is 'x':
-        alvec[:,:,:,0] = 1.0
-    # y
-    elif altype is 'y':
-        alvec[:,:,:,1] = 1.0
-    # z 
-    elif altype is 'z':
-        alvec[:,:,:,2] = 1.0
-    # radial
-    elif altype is 'radial':
-        alvec[:,:,:,0] = xx / rr
-        alvec[:,:,:,1] = yy / rr
-        alvec[:,:,:,2] = zz / rr
-
-    # cylradial
-    elif altype is 'cylradial':
-        cyl_rr = np.sqrt(xx**2 + yy**2)
-        alvec[:,:,:,0] = xx / cyl_rr
-        alvec[:,:,:,1] = yy / cyl_rr
-    # poloidal
-    elif altype is 'poloidal':
-        raise ValueError('poloidal no implemented yet')
-    # toroidal
-    elif altype is 'toroidal':
-        cyl_rr = np.sqrt(xx**2 + yy**2)
-        alvec[:,:,:,0] = yy / cyl_rr
-        alvec[:,:,:,1] = -xx / cyl_rr
-    elif altype is '0':
-        alvec = alvec
-    else:
-        raise ValueError('no acceptable altype argument')
-
-    if altype is not '0':
-    # Normalize
-        length = np.sqrt(alvec[:,:,:,0]*alvec[:,:,:,0] +
-                     alvec[:,:,:,1]*alvec[:,:,:,1] +
-                     alvec[:,:,:,2]*alvec[:,:,:,2])
-        alvec[:,:,:,0] = np.squeeze(alvec[:,:,:,0]) / ( length + 1e-60 )
-        alvec[:,:,:,1] = np.squeeze(alvec[:,:,:,1]) / ( length + 1e-60 )
-        alvec[:,:,:,2] = np.squeeze(alvec[:,:,:,2]) / ( length + 1e-60 )
+    alvec = DiskEqs.eqDustAlignment(ppar['crd_sys'],grid.x,grid.y,grid.z, ppar['altype'])
 
     return alvec
 
