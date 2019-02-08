@@ -12,6 +12,7 @@ from radmc3dPy import *
 import los
 import pdb
 import fntools
+import copy
 
 def getIm2Tb(im, wav):
     ld2 = (wav*1e-4)**2.
@@ -440,15 +441,15 @@ def getOutput_op(op, mopac, dinfo, pngname):
     fig.savefig(pngname)
     plt.close()
 
-def getOutput_beta(ifreq, im, pngname):
+def getOutput_beta(ifreq, im,op, pngname):
     """
     calculate beta index
     ifreq = index for wavelength/frequency. should always be greater than 0. 
         the frequency decrease in increasing index
     """
-    if im.nwav == 1:
+    if im.nfreq == 1:
         raise ValueError('image should be multiwavelength for beta index calculations')
-    dum_image = im.deepcopy()
+    dum_image = copy.deepcopy(im)
     dalognu = np.log(dum_image.freq[ifreq-1]) - np.log(dum_image.freq[ifreq])
     if dum_image.stokes:
         dalogI = np.log(dum_image.image[:,:,0,ifreq-1]) - np.log(dum_image.image[:,:,0,ifreq])
@@ -457,14 +458,27 @@ def getOutput_beta(ifreq, im, pngname):
 
     beta = dalogI / dalognu - 2.
 
+    # opacity index
+    dinfo = op.readDustInfo()
+    ngs = len(dinfo['gsize'])
+
     fig = plt.figure()
-    ax = plt.gca()
+    ax = plt.add_subplot(121)
     pc = ax.pcolormesh(dum_image.x/natconst.au, dum_image.y/natconst.au, 
         beta.T)
     cbar = plt.colorbar(pc)
     ax.set_xlabel('X [AU]')
     ax.set_ylabel('Y [AU]')
     ax.set_title('Beta Index: %d - %d GHz'%(dum_image.freq[ifreq-1]/1e9, dum_image.freq[ifreq]/1e9))
+
+    ax = plt.add_subplot(122)
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    for ig in range(gns):
+        fext = interp1d(op.wav[ig], op.kabs[ig]+op.ksca[ig])
+        dlogkap = np.log(fext(dum_image.wav[ifreq-1])) - np.log(fext(dum_image.wav[ifreq]))
+        opbeta = dlogkap / dalognu
+        ax.text(xlim[1], ylim[0]*ig/float(ngs), ('a=%.1f, beta=%.1f'%(dinfo['gsize'],opbeta)), 
+            va='bottom', ha='right', color='w')
     fig.savefig(pngname)
     plt.close()
 
@@ -478,6 +492,14 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
         dooutput_fits=0, bwidthmhz=2000., coord='03h10m05s -10d05m30s',
         dooutput_los=1, dokern=False
         ):
+    """
+    dooutput_conv : bool
+        to output the convolved images
+    fwhm : list
+         number of different resolutions by number of wavelengths in image.out
+    pa   : list
+         number of different resolutions by number of wavelengths in image.out
+    """
 
     os.system('rm -rf '+rundir)
     os.system('mkdir '+rundir)
@@ -599,7 +621,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
 
             if (dooutput_beta) and (ifreq > 0):
                 pngname = rundir + '/out_beta.i%d.f%dx%d.png'%(imageinc[ii], camwav[ifreq], camwav[ifreq-1])
-                getOutput_beta(ifreq, dis, pngname)
+                getOutput_beta(ifreq, im, op, pngname)
 
             if dooutput_fits:
             # output to fits file
