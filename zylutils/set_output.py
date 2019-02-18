@@ -64,13 +64,13 @@ def getOptPolEm(opdepth, kpara90, korth90):
     p0 = (korth90 - kpara90) / (kpara90 + korth90)
     pol = np.zeros(opdepth.shape, dtype=np.float64) + p0
     pol = -np.exp(-opdepth)*np.sinh(p0*opdepth) / (1.-np.exp(-opdepth)*np.cosh(p0*opdepth) + 1e-90)
-    pol = abs(pol) #don't care about the signs just yet
+#    pol = abs(pol) #don't care about the signs just yet
     return pol
 
 def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname, polmax=None):
-    plt.figure(num=ifreq, figsize=(10,8))
+    plt.figure(num=ifreq, figsize=(14,8))
     # image
-    plt.subplot(2,2,1)
+    plt.subplot(2,3,1)
     image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
         arcsec=False, au=True, dpc=dis, oplotbeam='w', 
         stokes='I', bunit='Tb',ifreq=ifreq,vmin=0.,saturate='90percent', 
@@ -79,15 +79,22 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
         image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='w',
             nx=16, ny=16, polunitlen=polunitlen, ifreq=ifreq)
     #
-    # polarization degree
-    plt.subplot(2,2,2)
+    # polarized intensity
+    plt.subplot(2,3,2)
     image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
-        arcsec=False, au=True, dpc=dis, ifreq=ifreq, 
+        arcsec=False, au=True, dpc=dis, oplotbeam='w',
+        stokes='PI', bunit='Tb',ifreq=ifreq, saturate='90percent',
+        clevs=[0, 1.0, 10., 100., 200., 500.], clcol='w')
+
+    # polarized degree
+    plt.subplot(2,3,3)
+    image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear', 
+        arcsec=False, au=True, dpc=dis, ifreq=ifreq,
         saturate='100percent', stokes='P',bunit='percent' , vmin=0, vmax=polmax,
         clevs=[1., 5.0, 10., 20.], clcol='k')
 
     # optical depth
-    plt.subplot(2,2,3)
+    plt.subplot(2,3,4)
     if optim is not None:
         kext = fkabs(im.wav[ifreq]) + fksca(im.wav[ifreq])
         image.plotImage(image=optim, cmap=plt.cm.jet, interpolation='bilinear',
@@ -97,7 +104,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
             )
  
     # tau image
-    plt.subplot(2,2,4)
+    plt.subplot(2,3,5)
     if tauim is not None:
         reg = tauim.image[:,tauim.ny/2,0,ifreq] > tauim.image.min()
         if True in reg:
@@ -122,6 +129,13 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
             nx=nx, ny=ny, polunitlen=polunitlen, ifreq=ifreq)
         plt.xlim(-xmax, xmax)
         plt.ylim(-xmax, xmax)
+
+    # only polarized vectors that varies with polarized fraction, no image
+    plt.subplot(2,3,6)
+    if im.stokes is True:
+        image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='k',
+            nx=16, ny=16, polunitlen=-1, ifreq=ifreq)
+        plt.title('Polarization E Vectors')
 
     plt.tight_layout()
     plt.savefig(pngname)
@@ -288,6 +302,7 @@ def getOutput_minor(ifreq, im, optim, kpara90, korth90, kext, ylostemp, ylosdens
         dTdTauii, T0ii = los.getdTdTau(tau, dtaustg, lostemp, tauval=1., tauvalthres=3.)
         ydTdTau[iy] = dTdTauii
         ypol[iy] = dTdTauii / T0ii * p0
+    ydTdTau = - ydTdTau # change sign
 
     plt.figure(num=ifreq, figsize=(13,8))
 
@@ -435,7 +450,11 @@ def getOutput_op(op, mopac, dinfo, pngname):
         axii.plot(op.wav[ig], op.ksca[ig], 'b-', label='ksca')
         axii.set_xscale('log')
         axii.set_yscale('log')
-        axii.set_xlabel(r'wavelength [$\mu$m]')
+        if ig == ngs-1:
+            axii.set_xlabel(r'wavelength [$\mu$m]')
+            plt.legend()
+        ylim = axii.get_ylim()
+        axii.text(op.wav[ig].min(),ylim[0]*1.1, 'a=%.2e'%dinfo['gsize'][ig])
         axii.set_ylabel('Opacity')
 
     fig.savefig(pngname)

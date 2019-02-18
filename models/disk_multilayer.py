@@ -95,8 +95,8 @@ def getDefaultParams():
         ['gasspec_vturb', '0.2e5', 'Microturbulent line width'],
 
         # gas species
-        ['gasspec_mol_name', "['co']", 'name of molecule'],
-        ['gasspec_mol_abun', '[1e-4]', 'mass abundance '],
+        ['gasspec_mol_name', "['12co']", 'name of molecule'],
+        ['gasspec_mol_abun', '[5e-5]', 'mass abundance '],
         ['gasspec_mol_dbase_type', "['leiden']", ''],
         ['gasspec_mol_freezeout_dfact', '[1e-3]', 
          'Factor by which the molecular abundance should be decreased in the freeze-out zone'],
@@ -117,7 +117,15 @@ def getDefaultParams():
         ['alph', '0.01', 'viscosity parameter. set to -1 to use dM (not implemented yet).'],
         ['dM', '0.', 'constant accretion rate across disk. Uses this if alph is -1'],
         # alignment
-        ['altype', "'toroidal'", 'alignment type']
+        ['altype', "'toroidal'", 'alignment type'], 
+        ['B_R0', '[50*au, 50*au, 50*au]', ''],
+        ['B_zq0', '[10*au, 10*au, 10*au]', ''],
+        ['B_qh', '[1.25, 1.25, 1.25]', ''], 
+        ['Bmid0', '[0, 0, 1]', ''],
+        ['Batm0', '[1, 0, 0]', ''],
+        ['Bqmid', '[0.75, 0.75, 0.75]', ''],
+        ['Bqatm', '[0.5, 0.5, 0.5]', ''],
+        ['flip', '[False, False, False]', '']
              ]
 
     return defpar
@@ -473,8 +481,16 @@ def getDustAlignment(grid=None, ppar=None):
     -------
     Returns the dust grain alignment
     """
+    alpar = {}
+    if ppar['altype'] is 'bi_Bsph':
+        Bpar = {}
+        tags = ['B_R0', 'B_zq0', 'B_qh', 'Bmid0', 'Batm0', 'Bqmid', 'Bqatm', 'flip']
+        tagin = ['R0', 'zq0', 'qheight', 'Bmid0', 'Batm0', 'qmid', 'qatm', 'flip']
+        for ii in range(len(tags)):
+            Bpar[tagin[ii]] = ppar[tags[ii]]
+        alpar['bi_Bsph'] = Bpar
 
-    alvec = DiskEqs.eqDustAlignment(ppar['crd_sys'],grid.x,grid.y,grid.z, ppar['altype'])
+    alvec = DiskEqs.eqDustAlignment(ppar['crd_sys'],grid.x,grid.y,grid.z, ppar['altype'], alpar)
 
     return alvec
 

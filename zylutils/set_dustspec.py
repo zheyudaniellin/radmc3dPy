@@ -7,11 +7,18 @@ class dustspec(object):
     # file to store dust specifics
 
     def __init__(self):
-        self.lnkfiles = []
-        self.optconst = []
-        self.graintype = []
-        self.swgt = []
-        self.mabun = []
+        self.lnkfiles = []	# the full name of lnkfile 
+        self.optconst = []	# the filename prefix *.lnk
+        self.graintype = []	# type of grain
+        self.swgt = []		# specific grain density
+        self.mabun = []		# mass abundance
+
+    def fnSpec(self, lnkname, optconst, graintype, swgt, mabun):
+        self.lnkfiles.append(lnkname)
+        self.optconst.append(optconst)
+        self.graintype.append(graintype)
+        self.swgt.append(swgt)
+        self.mabun.append(mabun)
 
     def getSpec(self, specs=None):
         """
@@ -32,6 +39,14 @@ class dustspec(object):
             self.swgt.append(0.92)
             self.mabun.append(5.55)
 
+        # Waterice from Warren2008
+        if 'WarrenWater' in specs:
+            self.fnSpec('/scratch/zdl3gk/data/my_opacity/Warren/RefractiveIndex/waterice.lnk', 
+                'waterice',
+                'waterice', 
+                0.92,
+                5.55)
+
         # organics from Semenov
         if 'Organics' in specs:
             self.lnkfiles.append('/scratch/zdl3gk/data/my_opacity/Semenov/RefractiveIndex/organicsk.lnk')
@@ -47,6 +62,22 @@ class dustspec(object):
             self.graintype.append('carbon')
             self.swgt.append(1.5)
             self.mabun.append(3.53)
+
+        # organics from Henning 1996
+        if 'Henning_Organics' in specs:
+            self.fnSpec('/scratch/zdl3gk/data/my_opacity/Henning/RefractiveIndex/organicsk.lnk',
+                'organicsk',
+                'organics',
+                1.5,
+                3.53)
+
+        # troilite from Henning 1996
+        if 'Henning_Troilite' in specs:
+            self.fnSpec('/scratch/zdl3gk/data/my_opacity/Henning/RefractiveIndex/troilitek.lnk',
+                'troilitek',
+                'troilite',
+                4.83,
+                0.65) #details from Birnstiel 2018
 
         ## silicates from Semenov
         if 'Sil_Sem' in specs:

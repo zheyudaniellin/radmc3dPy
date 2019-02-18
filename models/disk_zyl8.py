@@ -91,27 +91,29 @@ def getDefaultParams():
 	['sigp', '0.2', 'exponent value for sigma'],
 	['mdisk', '0.05*ms', 'mass of disk'],
 	['sigma_type', '0', '0-polynomial, 1-exponential tapering'],
+        ['cutgdens', '1e-30', 'cut for gas density'],
         # envelope
         ['dMenv', '5e-6', 'envelope accretion rate onto disk [Msun/year]'], 
-        ['Rc', '30.*au', 'radius where envelope meets disk'],
+        ['rhoRc', '5e-16', 'Density at Rc. This is used if dMenv is < 0'], 
+        ['Rc', '50.*au', 'radius where envelope meets disk'],
         ['topen', '30', 'opening angle [deg]'],
         ['deltopen', '5', 'level of tapering angle [deg]'], 
         # temperature
         ['Rt','20.*au', ' characteristic radius for temperature, height'],
 	['T0mid', '105.', 'midplane temperature at Rt'], #with dM=5e-6, T=30 at 20au
 	['qmid', '-0.75', 'midplane temperature exponent'],
-	['T0atm', '145.', 'atmosphere temperature value at Rt'], #with Ts=4000, large grains, T=43 at 20au
+	['T0atm', '145.', 'atmosphere temperature value at Rt'], 
 	['qatm', '-0.5', 'atmosphere temperature exponent'],
+        ['cuttemp', '10', 'temperature cut'],
         # height
 	['H0', '7.5*au', 'height at Rt'],
 	['qheight', '1.125', 'height exponent'],
 	['zqratio', '3.0', 'multiple of scale height for temperature transition'],
 	['hdel', '2.0', 'power of transition for temperature'],
-	['cuttemp', '10', 'temperature cut'],
-	['cutgdens', '1e-30', 'cut for gas density'],
-        ['vsys', '0.0', 'systemic velocity'], 
         # alignment
-        ['altype', "'toroidal'", 'alignment type']
+        ['altype', "'toroidal'", 'alignment type'], 
+        # velocity
+        ['vsys', '0.0', 'systemic velocity']
               ]
 
     return defpar
@@ -352,9 +354,12 @@ def getGasDensity(grid=None, ppar=None):
     # include envelope
     r2d = rr[:,:,0]
     t2d = tt[:,:,0]
-    GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
-    dMenv = ppar['dMenv'] * natconst.ms / natconst.year
-    rhoRc = dMenv / (4.*np.pi) / np.sqrt(GMR3)
+    if ppar['dMenv'] >= 0:
+        GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
+        dMenv = ppar['dMenv'] * natconst.ms / natconst.year
+        rhoRc = dMenv / (4.*np.pi) / np.sqrt(GMR3)
+    else:
+        rhoRc = ppar['rhoRc']
     envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc)
     for ip in range(grid.nz):
         rhoin = rhogas[:,:,ip]
@@ -421,9 +426,12 @@ def getDustDensity(grid=None, ppar=None):
     # envelope component
     r2d = rr[:,:,0]
     t2d = tt[:,:,0]
-    GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
-    dMenv = ppar['dMenv'] * natconst.ms / natconst.year
-    rhoRc = dMenv / (4.*np.pi) / np.sqrt(GMR3)
+    if ppar['dMenv'] >= 0:
+        GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
+        dMenv = ppar['dMenv'] * natconst.ms / natconst.year
+        rhoRc = dMenv / (4.*np.pi) / np.sqrt(GMR3)
+    else:
+        rhoRc = ppar['rhoRc']
     rho_env2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc)
     rho_env2d = rho_env2d * ppar['g2d']
 
