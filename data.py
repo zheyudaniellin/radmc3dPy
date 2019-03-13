@@ -79,7 +79,7 @@ class radmc3dData(object):
     alvec     : ndarray
                 Dust alignment vector field
     qvis      : ndarray
-                heating for heatsource.inp
+                heating for heatsource.inp. same dimensions as gas density
     """
 
     def __init__(self, grid=None):
@@ -1107,7 +1107,7 @@ class radmc3dData(object):
                  Total heating luminosity in cgs
         """
         vol = self.grid.getCellVolume()
-        lum = vol * np.squeeze(self.qvis)
+        lum = np.squeeze(vol) * np.squeeze(self.qvis)
         tot_lum = lum.sum()
         return tot_lum
  

@@ -1882,7 +1882,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
     oplotbeam     : str, optional
                     Input a string for its color, then will overplot an ellipse for the fwhm of psf
 
-    beamxy        : str, optional
+    beamxy        : array, optional
                     Input a two element array for the center coordinate of plotting the beam
 
     textcolor     : str, optional
@@ -2189,7 +2189,12 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 cb_label = 'log(Tb) [K]'
             else:
 #                data = data * ld2 / 2. / nc.kk #Rayleigh-Jeans limit
-                data = hmu / nc.kk / np.log(2.*hmu3_c2/(data+1e-90)+1.) #Planck
+                # negative values
+                reg = data <= 0.
+                data[reg] = data[reg] * ld2 / 2. / nc.kk
+                # positive values
+                reg = ~ reg
+                data[reg] = hmu / nc.kk / np.log(2.*hmu3_c2/(data[reg]+1e-90)+1.) #Planck
                 cb_label = 'Tb [K]'
         elif bunit.lower() == 'percent':
             if log:

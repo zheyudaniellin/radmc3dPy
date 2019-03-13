@@ -197,13 +197,22 @@ def eqDustAlignment(crd_sys,xaxis,yaxis,zaxis,
 
     return alvec
 
-def eqEnvelopeDens(rr, tt, Rrot, rho0, topen=0, deltopen=5):
+def fncavprof(cyr, cavpar):
+    # z profile for cavity
+    zcav = cavpar[1] * (cyr / cavpar[0])**(cavpar[2]) + cavpar[3]
+    # always positive
+    return zcav
+
+def eqEnvelopeDens(rr, tt, Rrot, rho0, cavpar=None):
     """
     rr, tt = radius and theta meshgrid. [cm], [rad] in 2D
-    par = [Rrot, rho0]
+    Rrot = radius where infall velocity equals rotational velocity
+        the radius where infall velocity equals zero is 0.5*Rrot
     rho0 = rho0 at Rrot. can be found by dm/4/pi/wkc where wkc=sqrt(GM*Rrot**3)
-    topen = opening angle [deg]
-    deltopen = change in opening angle [deg]
+    cavpar = [Rc, Hc, qcav, Hoff, delH] 
+        the location of cavity by H = Hc * (R/Rc)**qcav + Hoff
+        where R is in cylindrical coordinates
+        delH is the length scale in height for exponential tapering
     """
     # ---------------solution to stream line---------
     def findsol(r, t, Rrot):
@@ -231,15 +240,21 @@ def eqEnvelopeDens(rr, tt, Rrot, rho0, topen=0, deltopen=5):
             raise ValueError('solution not found')
 
         return goodres
-    # ------------------------------------------------
+    # ---------------------------------------------
 
     rshape = rr.shape
     dens = rr * 0.
 
     mu02d = rr*0.
 
+    # mask. mask for multiplying to the density array
+    cavmask = rr * 0 + 1.
+
     for ir in range(rshape[0]):
         for it in range(rshape[1]):
+            cyr = rr[ir,it] * np.sin(tt[ir,it])
+            zii = rr[ir,it] * np.cos(tt[ir,it])
+
             # find solution to theta0
             mu0 = findsol(rr[ir,it], tt[ir,it], Rrot)
             mu02d[ir,it] = mu0
@@ -248,22 +263,24 @@ def eqEnvelopeDens(rr, tt, Rrot, rho0, topen=0, deltopen=5):
             densii = ( rho0
                             * (rr[ir,it] / Rrot)**(-1.5)
                             * (1. + np.cos(tt[ir,it]) / mu0)**(-0.5)
-                            * (np.cos(tt[ir,it])/mu0 
-                               + 0.5 * Rrot / rr[ir,it] * (mu0)**2
+                            * (np.cos(tt[ir,it])/mu0 / 2.
+                               + Rrot / rr[ir,it] * (mu0)**2
                               )**(-1.) ) 
-            # opening angle
-            if tt[ir,it] < (topen*natconst.rad):
-                fac = np.exp(-(
-                               (topen*natconst.rad - tt[ir,it])
-                               / (deltopen*natconst.rad) 
-                              )**2)
-            elif tt[ir,it] > (np.pi-(topen*natconst.rad)):
-                fac = np.exp(-(
-                               ((np.pi-topen*natconst.rad) - tt[ir,it]) 
-                               / (deltopen*natconst.rad)
-                              )**2)
+            # cavity
+            if cavpar is not None:
+                zcav = fncavprof(cyr, cavpar)
+                delH = cavpar[4]
+                if zii > zcav:
+                    fac = np.exp( - ((zii - zcav) / delH)**2)
+                elif zii < -zcav:
+                    fac = np.exp( - ((zii + zcav) / delH)**2)
+                else:
+                    fac = 1.
+                cavmask[ir,it] = fac
             else:
                 fac = 1.
+                cavmask[ir,it] = fac
+
             dens[ir, it] = fac * densii
 
-    return dens
+    return dens, cavmask

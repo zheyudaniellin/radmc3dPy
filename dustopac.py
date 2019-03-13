@@ -858,9 +858,10 @@ class radmc3dDustOpac(object):
 
                 avgmatdens = 1. / np.sum( np.array(ppar['mixabun']) / np.array(ppar['gdens']) )
                 matdensinfo = [avgmatdens]
+                
+                avggsize = (1. / np.sum( np.array(dweights) / np.array(gsize)**3))**(1./3.)
 
-                avggsize = (1. / np.sum( np.array(dweights) / np.array(ppar['gsize'])**3 ))**(1./3.)
-                gsizeinfo = [avgsize]
+                gsizeinfo = [avggsize]
 
                 dweightsinfo = [1.]
 
@@ -1035,7 +1036,7 @@ class radmc3dDustOpac(object):
                     ext = ['avg']
                     therm = [True]
                     matdensinfo = [swgt]
-                    avggsize = (1. / np.sum( np.array(dweights) / np.array(ppar['gsize'])**3 ))**(1./3.)
+                    avggsize = (1. / np.sum( np.array(dweights) / np.array(gsize)**3 ))**(1./3.)
                     gsizeinfo = [avggsize]
                     dweightsinfo = [1.0]
             else:
@@ -1477,13 +1478,17 @@ class radmc3dDustOpac(object):
                         if oform == 3:
                             # Do the inter-/extrapolation of for the scattering phase function
                             dum = np.zeros(nwav0, dtype=float)
-                            dum[ii] = 10. ** np.interp(np.log10(owav[ii]), np.log10(dw), np.log10(gsym))
+                            #dum[ii] = 10. ** np.interp(np.log10(owav[ii]), np.log10(dw), log10(gsym)) #sometimes gsym may be negative
+                            dum[ii] = np.interp(np.log10(owav[ii]), np.log10(dw), gsym)
 
                             # der = np.log10(gsym[1] / gsym[0]) / np.log10(dw[1] / dw[0])
                             dum[il] = 10. ** (np.log10(gsym[0]) + np.log10(dw[0] / owav[il]))
 
                             # der = np.log10(gsym[nwav - 1] / gsym[nwav - 2]) / np.log10(dw[nwav - 1] / dw[nwav - 2])
-                            dum[ih] = 10. ** (np.log10(gsym[nwav - 1]) + np.log10(owav[il] / dw[nwav - 1]))
+                            if gsym[nwav-1] >= 0:
+                                dum[ih] = 10. ** (np.log10(gsym[nwav - 1]) + np.log10(owav[il] / dw[nwav - 1]))
+                            else:
+                                dum[ih] = - 10.**(np.log10(-gsym[nwav-1]) + np.log10(owav[il] / dw[nwav-1]))
 
                             ogsym = ogsym + np.array(dum) * mixabun[i][j]
 

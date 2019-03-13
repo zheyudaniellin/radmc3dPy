@@ -67,14 +67,19 @@ def getOptPolEm(opdepth, kpara90, korth90):
 #    pol = abs(pol) #don't care about the signs just yet
     return pol
 
-def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname, polmax=None):
+def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname, polmax=None, imTblim=None):
     plt.figure(num=ifreq, figsize=(14,8))
     # image
+    if imTblim is not None:
+        imTbvmin, imTbvmax = imTblim[0], imTblim[1]
+    else:
+        imTbvmin, imTbvmax = 0, None
     plt.subplot(2,3,1)
     image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
         arcsec=False, au=True, dpc=dis, oplotbeam='w', 
-        stokes='I', bunit='Tb',ifreq=ifreq,vmin=0.,saturate='90percent', 
-        clevs=[1.0, 10., 100., 200., 500.], clcol='w')
+        stokes='I', bunit='Tb',ifreq=ifreq, saturate='90percent', 
+        clevs=[1, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200], clcol='w', 
+        vmin=imTbvmin, vmax=imTbvmax)
     if im.stokes is True:
         image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='w',
             nx=16, ny=16, polunitlen=polunitlen, ifreq=ifreq)
@@ -141,9 +146,9 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     plt.savefig(pngname)
     plt.close()
 
-def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
+def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
     totdmass = dat.getDustMass()
-    plt.figure(num=ifreq, figsize=(10,8))
+    plt.figure(num=ifreq, figsize=(14,8))
 
     if tau3d is not None:
         # get the tau3d x,y,z coordinates. 
@@ -196,8 +201,11 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
         xmin, xmax = -dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au
         ymin, ymax = xmin, xmax	# cartesian coordinates
 
+    npltrow = 2
+    npltcol = 3
+
     # density structure
-    plt.subplot(2,2,1)
+    plt.subplot(npltrow, npltcol,1)
     sliceplt = analyze.plotSlice2D(data=dat,
         var='ddens', ispec=-1,
         plane='xy', crd3=0.0,
@@ -222,7 +230,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
         plt.ylim(ymin, ymax)
 
     # density structure in radius, theta
-    plt.subplot(2,2,3)
+    plt.subplot(npltrow, npltcol,4)
     analyze.plotSlice2D(data=dat, 
         var='ddens', ispec=-1,
         plane='xy', crd3=0.0,
@@ -233,9 +241,6 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
         clmin=1e-20, clmax=1e-10, cllog=True, ncl=11, clcol='k',
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%.1e',
         lattitude=False, Sph2Cart=False, mirror=True)
-#    plt.text(tau_r.max()*0.9, tau_tta.max()*0.9,
-#             'Total Dust=%.1e Msun'%(totdmass/natconst.ms),
-#             va='bottom', ha='right', color='w')
     if (tau_r is not None) and (tau_tta is not None):
         plt.plot(tau_r, tau_tta*180./np.pi, 'w')
     plt.legend()
@@ -243,7 +248,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
     plt.xscale('symlog')
 
     # temperature structure
-    plt.subplot(2,2,2)
+    plt.subplot(npltrow, npltcol,2)
     temp_slice = analyze.plotSlice2D(data=dat, var='dtemp', plane='xy', crd3=0.,
         ispec=0, log=True, linunit='au', angunit='deg',
         gridcolor='r', gridalpha=1, showgrid=False,
@@ -266,7 +271,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
             va='bottom',ha='right', color='w')
 
     # temperature structure in radius, theta
-    plt.subplot(2,2,4)
+    plt.subplot(npltrow, npltcol,5)
     dum = analyze.plotSlice2D(data=dat, var='dtemp', plane='xy', crd3=0.,
         ispec=0, log=True, linunit='au', angunit='deg',
         gridcolor='r', gridalpha=1, showgrid=False,
@@ -279,6 +284,46 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname):
         plt.plot(tau_r, tau_tta*180./np.pi, 'w')
     plt.legend()
     plt.xscale('symlog')
+
+    # temperature profile
+    plt.subplot(npltrow, npltcol, 3)
+    # take index nearest theta=np.pi/2
+    inx = np.argmin(abs(dat.grid.y - np.pi/2.))
+    Tmidprof = dat.dusttemp[:,inx,0,0]
+    # take index near theta=30 degrees
+    inx = np.argmin(abs(dat.grid.y - 30. * natconst.rad))
+    Tatmprof = dat.dusttemp[:,inx,0,0]
+
+    plt.plot(dat.grid.x/natconst.au, Tmidprof, label='Midplane')
+    plt.plot(dat.grid.x/natconst.au, Tatmprof, label='atm')
+    Tirr = np.sqrt(parobj.ppar['rstar'][0] / 2. / dat.grid.x) * parobj.ppar['tstar'][0]
+    plt.plot(dat.grid.x/natconst.au, Tirr, label='Tirr')
+    plt.legend()
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.title('Temperature')
+
+    # surface density
+    plt.subplot(npltrow, npltcol, 6)
+    ax_sig = plt.gca()
+    dat.getSigmaDust(idust=-1)
+    totsigma = dat.sigmadust
+    ax_sig.plot(dat.grid.x/natconst.au, totsigma, 'k-', label=r'Total $\Sigma_{d}$')
+    ax_sig.set_ylim(totsigma.min()/2., totsigma.max()*2.)
+    ngs = dat.rhodust.shape[-1]
+    if ngs != 1:
+        for ig in range(ngs):
+            dat.getSigmaDust(idust=ig)
+            ax_sig.plot(dat.grid.x/natconst.au, dat.sigmadust, linestyle='--', 
+                label='idust=%d'%ig)
+        # leave total sigma to be the final 
+        dat.getSigmaDust(idust=-1)
+    ax_sig.legend(loc='center left')
+    ax_sig.set_xscale('log')
+    ax_sig.set_yscale('log')
+    ax_sig.set_title('Dust Surface Density')
+    ax_sig.text(0.01,0.01, 'Total Dust=%.1e Msun'%(totdmass/natconst.ms),
+        va='bottom', ha='left', color='k', transform=ax_sig.transAxes)
 
     plt.tight_layout()
     plt.savefig(pngname)
@@ -454,9 +499,18 @@ def getOutput_op(op, mopac, dinfo, pngname):
             axii.set_xlabel(r'wavelength [$\mu$m]')
             plt.legend()
         ylim = axii.get_ylim()
-        axii.text(op.wav[ig].min(),ylim[0]*1.1, 'a=%.2e'%dinfo['gsize'][ig])
+#        axii.text(op.wav[ig].min(),ylim[0]*1.1, 'a=%.2e'%dinfo['gsize'][ig])
+        if dinfo['gsize'][ig] < 1.:
+            gsizetxt = 'a=%.1e'%dinfo['gsize'][ig]
+        else:
+            gsizetxt = 'a=%.1f'%dinfo['gsize'][ig]
+        axii.set_title(gsizetxt + r'$\mu$m')
         axii.set_ylabel('Opacity')
 
+        # overplot the beckwith opacity
+        axii.plot(op.wav[ig], 10.*(op.freq[ig] / 1e12)**1., linestyle='--')
+
+    fig.tight_layout()
     fig.savefig(pngname)
     plt.close()
 
@@ -504,16 +558,23 @@ def getOutput_beta(ifreq, im,op, pngname):
 # ------------------------------------------------------------
 def commence(rundir, polunitlen=-2, dis=400, polmax=None, 
         dooutput_op=1, 
-        dooutput_im=1, dooutput_xy=0, dooutput_minor=0, 
+        dooutput_im=1, imTblim=None, 
+        dooutput_xy=0, xyinx=None, 
+        dooutput_minor=0, 
         dooutput_stokes=0,
         dooutput_conv=0, fwhm=None, pa=[[0]], 
         dooutput_beta=0, 
         dooutput_fits=0, bwidthmhz=2000., coord='03h10m05s -10d05m30s',
-        dooutput_los=1, dokern=False
+        dooutput_los=0, dokern=False
         ):
     """
     dooutput_conv : bool
         to output the convolved images
+    imTblim : list
+           list of two elements for vmin, vmax of output_im image
+    xyinx : tuple
+            2 element tuple to specify which image to plot xy. 
+            In (a,b) where a is the index for inclination and b is for wavelength
     fwhm : list
          number of different resolutions by number of wavelengths in image.out
     pa   : list
@@ -528,6 +589,10 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
 
     imageinc = fntools.zylreadvec('inp.imageinc')
     ninc = len(imageinc)
+
+    # read parameter file
+    parobj = params.radmc3dPar()
+    parobj.readPar()
 
     # opacity
     op = dustopac.radmc3dDustOpac()
@@ -621,15 +686,22 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
 
             if dooutput_im:
                 pngname = rundir+'/out_im.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca, pngname, polmax=polmax)
+                getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca, pngname, polmax=polmax, imTblim=imTblim)
 
             if dooutput_xy:
-                pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, pngname)
+                if xyinx is not None:
+                    if (xyinx[0] == ii) and (xyinx[1] == ifreq):
+                        pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
+                        getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname)
+
+                else:
+                    pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
+                    getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname)
 
             if dooutput_minor:
                 pngname=rundir+'/out_minor.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                getOutput_minor(ifreq, im, optim, kpara90, korth90, kext, ylostemp, ylosdens, pngname)
+                getOutput_minor(ifreq, im, optim, kpara90, korth90, kext, 
+                            ylostemp, ylosdens, pngname)
             if dooutput_stokes:
                 pngname=rundir+'/out_stokes.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
                 getOutput_stokes(ifreq, dis, im, pngname, polmax=polmax)
@@ -663,7 +735,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                 for ifreq in range(ncamwav):
                     if dooutput_im:
                         pngname = rundir+'/out_im.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
-                        getOutput_im(ifreq, dis, conv, optim, tauim, polunitlen, fkabs, fksca, pngname, polmax=polmax)
+                        getOutput_im(ifreq, dis, conv, optim, tauim, polunitlen, fkabs, fksca, pngname, polmax=polmax, imTblim=imTblim)
 
 #                    if dooutput_xy:
 #                        pngname = rundir+'/out_xy.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
