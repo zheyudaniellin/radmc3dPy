@@ -41,7 +41,7 @@ def create_params(temp2ddir, mopac0, scatmode):
     par.writeParfile(fdir=temp2ddir)
     return par, par0
 
-def create_opac(temp2ddir, mopac0, op):
+def create_opac(temp2ddir, mopac0, op, scatmode):
     os.system('cp dustinfo.zyl '+temp2ddir)
     ndust = len(mopac0['ext'])
     opac_align = mopac0['align']
@@ -54,17 +54,21 @@ def create_opac(temp2ddir, mopac0, op):
         os.system('cp %s %s'%(fname, temp2ddir))
     if opac_align:
         op.writeMasterOpac(ext=mopac0['ext'], therm=mopac0['therm'],
-            scattering_mode_max=5, alignment_mode=0, fdir=temp2ddir)
+            scattering_mode_max=int(scatmode), alignment_mode=0, fdir=temp2ddir)
     return 0
 
 def create_grid(temp2ddir, par, par0):
+    # create grid specifically for 2d temperature calculations
     grid2d = reggrid.radmc3dGrid()
 
+    # radial coordinate
     xbound = par0.pvalstr['xbound']
     nxi = par0.pvalstr['nx']
     par.setPar(parlist=['xbound', xbound, '', ''])
     par.setPar(parlist=['nx', nxi, '', ''])
 
+    # theta coordinate. 
+    # use mirror symmetry. thus only take theta to pi/2
     ybound = []
     nyi = []
     iy = 0
@@ -79,6 +83,7 @@ def create_grid(temp2ddir, par, par0):
     par.setPar(parlist=['ybound', str(ybound), '', ''])
     par.setPar(parlist=['ny', str(nyi), '', ''])
 
+    # phi coordinate. turn off
     zbound = [0.]
     nzi = [0]
     par.setPar(parlist=['zbound', str(zbound), '', ''])
@@ -94,6 +99,8 @@ def create_grid(temp2ddir, par, par0):
     return grid2d
 
 def create_data(temp2ddir, grid2d, grid3d, ndust):
+    # dat3d is assumed not to have mirror symmetry 
+
     dat3d = data.radmc3dData(grid=grid3d)
     dat2d = data.radmc3dData(grid=grid2d)
 
@@ -175,7 +182,7 @@ def pipeline(dohydroeq=0, itermax=0, scatmode='1'):
     par, par0 = create_params(temp2ddir, mopac0, scatmode)
 
     # recreate opacity
-    dum = create_opac(temp2ddir, mopac0, op0)
+    dum = create_opac(temp2ddir, mopac0, op0, scatmode)
 
     # recreate radmc3d.inp
     setup.writeRadmc3dInp(modpar=par, fdir=temp2ddir)

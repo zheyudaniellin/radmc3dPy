@@ -1882,7 +1882,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
     oplotbeam     : str, optional
                     Input a string for its color, then will overplot an ellipse for the fwhm of psf
 
-    beamxy        : str, optional
+    beamxy        : array, optional
                     Input a two element array for the center coordinate of plotting the beam
 
     textcolor     : str, optional
@@ -2173,7 +2173,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 # using beam area
                 if len(image.fwhm) == 1:
                     norm_area = (image.fwhm[0][0]/3600.*np.pi/180.) * (image.fwhm[0][1]/3600.*np.pi/180.) * np.pi / 4. / np.log(2.0)
-                elif len(image.fwhm) == nfreq:
+                elif len(image.fwhm) == image.nfreq:
                     norm_area = (image.fwhm[ifreq][0]/3600.*np.pi/180.) * (image.fwhm[ifreq][1]/3600.*np.pi/180.) * np.pi / 4. / np.log(2.0)
                 else:
                     raise ValueError('wrong number of elements for fwhm')
@@ -2189,7 +2189,12 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 cb_label = 'log(Tb) [K]'
             else:
 #                data = data * ld2 / 2. / nc.kk #Rayleigh-Jeans limit
-                data = hmu / nc.kk / np.log(2.*hmu3_c2/(data+1e-90)+1.) #Planck
+                # negative values
+                reg = data <= 0.
+                data[reg] = data[reg] * ld2 / 2. / nc.kk
+                # positive values
+                reg = ~ reg
+                data[reg] = hmu / nc.kk / np.log(2.*hmu3_c2/(data[reg]+1e-90)+1.) #Planck
                 cb_label = 'Tb [K]'
         elif bunit.lower() == 'percent':
             if log:
@@ -2275,7 +2280,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
 
         # title
         if titleplt is None:
-            plt.title(title_stokes + ' ' + title_bunit + ' at ' + r'$\lambda$=' + 
+            ax.set_title(title_stokes + ' ' + title_bunit + ' at ' + r'$\lambda$=' + 
                    ("%.2f" % image.wav[ifreq]) + r'$\mu$m')
         else:
             ax.set_title(titleplt)
@@ -2543,6 +2548,45 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
         plt.show()
 
     return {'implot': implot, 'cbar': cbar}
+
+def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None, **kwargs):
+    """
+    Plots series of radmc3d Image using plotImage, iterating in wavelength
+    Parameters
+    ----------
+    image : radmc3dImage
+             
+    wavinx : list of int
+             index for ifreq to be plotted. Default is to plot all wavelengths
+    chnfig : plt.figure()
+             the figure to be plotted on
+    **kwargs : other keywords for plotImage
+    """
+    if wavinx is None:
+        wavinx = range(image.nwav)
+        nwavinx = image.nwav
+    nwavinx = len(wavinx)
+
+    nrows = np.floor(np.sqrt(nwavinx))
+    ncols = np.ceil(nwavinx / nrows)
+    nrows, ncols = int(nrows), int(ncols)
+
+    from mpl_toolkits.axes_grid1 import ImageGrid
+    if chnfig is None:
+        chnfig = plt.figure()
+    if chngrid is None:
+        chngrid = ImageGrid(chnfig, 111, nrows_ncols=(nrows, ncols), axes_pad=0.1,
+            share_all=True, cbar_location='right', cbar_mode='single',
+            cbar_size='5%', cbar_pad=0.15)
+
+    for ii in range(nwavinx):
+        # plotting axes
+        axii = chngrid[ii]
+        dum = plotImage(image=image, ifreq=wavinx[ii], ax=axii, nocolorbar=True, **kwargs)
+
+    cbar = axii.cax.colorbar(dum['implot'])
+
+    return chngrid
 
 def plotTausurf(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=None, saturate=None, bunit='norm',
               ifreq=0, cmask_rad=None, interpolation='nearest', cmap=plt.cm.gist_gray, stokes='I',

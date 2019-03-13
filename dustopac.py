@@ -530,7 +530,8 @@ class radmc3dDustOpac(object):
 
     def makeOpac(self, ppar=None, wav=None, old=False, code='python',
                  theta=None, logawidth=None, wfact=3.0, na=20, chopforward=0., errtol=0.01,
-                 verbose=False, extrapolate=False, ksca0=None, fdir=None):
+                 verbose=False, extrapolate=False, fdir=None,
+                 ksca0=None, albedo0=None):
         """Createst the dust opacities using a Mie code distributed with RADMC-3D.
 
         Parameters
@@ -607,13 +608,22 @@ class radmc3dDustOpac(object):
         old         : bool, optional
                       If set to True the file format of the previous, 2D version of radmc will be used
 
-        ksca0      : float, optional
-                      If set to a value, multiplies all ksca related by ksca0
-                      Not sure why radmc3d cannot accept scattering_mode_max != 5 for aligned grains, 
-                      so use this brute force way to turn off scattering
-
         fdir        : string, optional
                       the directory to store the files
+        # some brute force settings to opacity
+        ksca0      : float or list/1d array, optional
+                      If set to a float value, multiplies all ksca related by ksca0.
+                      If list, then means grain species dependent and should have 
+                      same number of elements as grain species. 
+                      Not sure why radmc3d cannot accept scattering_mode_max!=5 
+                      for aligned grains, so use this brute force way to turn 
+                      off scattering
+
+        albedo0    : float or list, optional
+                     Brute force way to control albedo at all wavelengths. 
+                     The extinction opacity is kept the same, but alter kabs and ksca. 
+                     Float for all grain species, or list to be species dependent. 
+                     This is done after ksca0 argument. 
         """
 
         #
@@ -651,6 +661,7 @@ class radmc3dDustOpac(object):
             matdensinfo = []
             dweightsinfo = []
             for idust in range(len(ppar['lnk_fname'])):
+                print('Reading: %s'%ppar['lnk_fname'][idust])
 
                 # makedust needs the lnk file to be sorted in wavelength so create a dummy file
                 # which contains the sorted optical constants
@@ -742,16 +753,20 @@ class radmc3dDustOpac(object):
                                                  agraincm=gsize[igs] * 1e-4, lamcm=wav * 1e-4, theta=theta,
                                                  logawidth=logawidth, wfact=wfact, na=na, chopforward=chopforward,
                                                  errtol=errtol, verbose=verbose, extrapolate=extrapolate, return_type=1)
-                        if ksca0 is not None:
-                            o.ksca[0] = o.ksca[0] * ksca0
-                            o.z11[0] = o.z11[0] * ksca0
-                            o.z12[0] = o.z12[0] * ksca0
-                            o.z22[0] = o.z22[0] * ksca0
-                            o.z33[0] = o.z33[0] * ksca0
-                            o.z34[0] = o.z34[0] * ksca0
-                            o.z44[0] = o.z44[0] * ksca0
-                            o.ksca_from_z11[0] = o.ksca_from_z11[0] * ksca0
 
+                        # ksca0 setting
+                        if type(ksca0) is float:
+                            o.forceKsca(ksca0)
+                        elif (type(ksca0) is list) or (type(ksca0) is np.ndarray):
+                            o.forceKsca(ksca0[igs])
+
+                        # albedo setting
+                        if type(albedo0) is float:
+                            o.forceAlbedo(albedo0)
+                        elif (type(albedo0) is list) or (type(albedo0) is np.ndarray):
+                            o.forceAlbedo(albedo0[igs])
+
+                        # writing opacity
                         if ppar['scattering_mode_max'] <= 2:
                             o.writeOpac(ext='idust_' + (str(idust + 1)) + '_igsize_' + str(igs + 1), idust=0,
                                         scatmat=False, fdir=fdir)
@@ -843,9 +858,10 @@ class radmc3dDustOpac(object):
 
                 avgmatdens = 1. / np.sum( np.array(ppar['mixabun']) / np.array(ppar['gdens']) )
                 matdensinfo = [avgmatdens]
+                
+                avggsize = (1. / np.sum( np.array(dweights) / np.array(gsize)**3))**(1./3.)
 
-                avggsize = (1. / np.sum( np.array(dweights) / np.array(ppar['gsize'])**3 ))**(1./3.)
-                gsizeinfo = [avgsize]
+                gsizeinfo = [avggsize]
 
                 dweightsinfo = [1.]
 
@@ -971,16 +987,20 @@ class radmc3dDustOpac(object):
                                              logawidth=logawidth, wfact=wfact, na=na, chopforward=chopforward,
                                              errtol=errtol, verbose=verbose, extrapolate=extrapolate, return_type=1)
 
-                    if ksca0 is not None:
-                        o.ksca[0] = o.ksca[0] * ksca0
-                        o.z11[0] = o.z11[0] * ksca0
-                        o.z12[0] = o.z12[0] * ksca0
-                        o.z22[0] = o.z22[0] * ksca0
-                        o.z33[0] = o.z33[0] * ksca0
-                        o.z34[0] = o.z34[0] * ksca0
-                        o.z44[0] = o.z44[0] * ksca0
-                        o.ksca_from_z11[0] = o.ksca_from_z11[0] * ksca0
+                    # brute force settings
+                    # ksca0 setting
+                    if type(ksca0) is float:
+                        o.forceKsca(ksca0)
+                    elif (type(ksca0) is list) or (type(ksca0) is np.ndarray):
+                        o.forceKsca(ksca0[igs])
 
+                    # albedo setting
+                    if type(albedo0) is float:
+                        o.forceAlbedo(albedo0)
+                    elif (type(albedo0) is list) or (type(albedo0) is np.ndarray):
+                        o.forceAlbedo(albedo0[igs])
+
+                    # writing
                     if ppar['scattering_mode_max'] <= 2:
                         o.writeOpac(ext='idust_1_igsize_' + str(igs + 1), idust=0, scatmat=False, fdir=fdir)
                     else: 
@@ -1016,7 +1036,7 @@ class radmc3dDustOpac(object):
                     ext = ['avg']
                     therm = [True]
                     matdensinfo = [swgt]
-                    avggsize = (1. / np.sum( np.array(dweights) / np.array(ppar['gsize'])**3 ))**(1./3.)
+                    avggsize = (1. / np.sum( np.array(dweights) / np.array(gsize)**3 ))**(1./3.)
                     gsizeinfo = [avggsize]
                     dweightsinfo = [1.0]
             else:
@@ -1043,6 +1063,76 @@ class radmc3dDustOpac(object):
             os.remove('dust.inp')
             if not old:
                 os.remove('frequency.inp')
+
+    def forceKsca(self, ksca_fac):
+        """
+        direct manipulation for scattering opacity
+        Parameters
+        ----------
+        ksca_fac : float or 1d list/ndarray
+        """
+        ngs = len(self.ksca)
+        if (type(ksca_fac) is list) or (type(ksca_fac) is np.ndarray):
+            if len(ksca_fac) != ngs:
+                raise ValueError('number of input ksca_fac should be the same as number of grain species')
+
+        for ig in range(ngs):
+            if type(ksca_fac) is float:
+                fac = ksca_fac
+            elif (type(ksca_fac) is list) or (type(ksca_fac) is np.ndarray):
+                fac = ksca_fac[ig]
+            else:
+                raise ValueError('input ksca_fac has wrong data type')
+
+            self.ksca[ig] = self.ksca[ig] * fac
+            self.z11[ig] = self.z11[ig] * fac
+            self.z12[ig] = self.z12[ig] * fac
+            self.z22[ig] = self.z22[ig] * fac
+            self.z33[ig] = self.z33[ig] * fac
+            self.z34[ig] = self.z34[ig] * fac
+            self.z44[ig] = self.z44[ig] * fac
+            self.ksca_from_z11[ig] = self.ksca_from_z11[ig] * fac
+
+    def forceAlbedo(self, albedo):
+        """
+        Direct manipulation for albedo while extinction opacity is controlled. 
+        Currently not wavelength dependent
+        """
+        ngs = len(self.ksca)
+        if (type(albedo) is list) or (type(albedo) is np.ndarray):
+            if len(albedo) != ngs:
+                raise ValueError('number of input albedo should be the same as number of grain species')
+
+        for ig in range(ngs):
+            # original albedo, wavelength dependent
+            albig = self.ksca[ig] / (self.kabs[ig] + self.ksca[ig])
+
+            # determine factor
+            if type(albedo) is float:
+                alb = albedo
+            elif (type(albedo) is list) or (type(albedo) is np.ndarray):
+                alb = albedo[ig]
+            else:
+                raise ValueError('input albedo has wrong data type')
+
+            # check value
+            if (alb > 1) or (alb < 0):
+                raise ValueError('input albedo must be within 0,1')
+
+            # calculate
+            self.kabs[ig] = self.kabs[ig] * (1. - alb) / (1. - albig)
+            self.ksca[ig] = self.ksca[ig] * alb / albig
+
+            # other scattering matrix by scaling. careful when albig is zero
+            for iwav in range(len(albig)):
+                self.z11[ig][iwav,:] = self.z11[ig][iwav,:] * alb / albig[iwav]
+                self.z12[ig][iwav,:] = self.z12[ig][iwav,:] * alb / albig[iwav]
+                self.z22[ig][iwav,:] = self.z22[ig][iwav,:] * alb / albig[iwav]
+                self.z33[ig][iwav,:] = self.z33[ig][iwav,:] * alb / albig[iwav]
+                self.z34[ig][iwav,:] = self.z34[ig][iwav,:] * alb / albig[iwav]
+                self.z44[ig][iwav,:] = self.z44[ig][iwav,:] * alb / albig[iwav]
+
+            self.ksca_from_z11[ig] = self.ksca_from_z11[ig] * alb / albig
 
     def writeDustAlignFact(self, fname=None, ext=None, idust=None):
         """
@@ -1388,13 +1478,17 @@ class radmc3dDustOpac(object):
                         if oform == 3:
                             # Do the inter-/extrapolation of for the scattering phase function
                             dum = np.zeros(nwav0, dtype=float)
-                            dum[ii] = 10. ** np.interp(np.log10(owav[ii]), np.log10(dw), np.log10(gsym))
+                            #dum[ii] = 10. ** np.interp(np.log10(owav[ii]), np.log10(dw), log10(gsym)) #sometimes gsym may be negative
+                            dum[ii] = np.interp(np.log10(owav[ii]), np.log10(dw), gsym)
 
                             # der = np.log10(gsym[1] / gsym[0]) / np.log10(dw[1] / dw[0])
                             dum[il] = 10. ** (np.log10(gsym[0]) + np.log10(dw[0] / owav[il]))
 
                             # der = np.log10(gsym[nwav - 1] / gsym[nwav - 2]) / np.log10(dw[nwav - 1] / dw[nwav - 2])
-                            dum[ih] = 10. ** (np.log10(gsym[nwav - 1]) + np.log10(owav[il] / dw[nwav - 1]))
+                            if gsym[nwav-1] >= 0:
+                                dum[ih] = 10. ** (np.log10(gsym[nwav - 1]) + np.log10(owav[il] / dw[nwav - 1]))
+                            else:
+                                dum[ih] = - 10.**(np.log10(-gsym[nwav-1]) + np.log10(owav[il] / dw[nwav-1]))
 
                             ogsym = ogsym + np.array(dum) * mixabun[i][j]
 

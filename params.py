@@ -374,8 +374,8 @@ class radmc3dPar(object):
         self.setPar(
             ['xres_nstep', '3', 'Number of grid cells to create in a refinement level (spherical coordinates only)',
              'Grid parameters'])
-        self.setPar(['wbound', '[0.1, 7.0, 25., 1e4]', '  Boundraries for the wavelength grid', 'Grid parameters'])
-        self.setPar(['nw', '[19, 50, 30]', '  Number of points in the wavelength grid', 'Grid parameters'])
+        self.setPar(['wbound', '[0.1, 7.0, 25., 1.5e4]', '  Boundraries for the wavelength grid', 'Grid parameters'])
+        self.setPar(['nw', '[20, 50, 35]', '  Number of points in the wavelength grid', 'Grid parameters'])
         self.setPar(['levelMaxLimit', '5', '  Highest refinement level in octree AMR', 'Grid parameters'])
 
         #

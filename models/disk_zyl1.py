@@ -63,11 +63,11 @@ def getDefaultParams():
 
     defpar = [
         ['crd_sys', "'sph'", 'Coordinate system'], 	
-	['nx', '[30, 60, 10]', 'Number of grid points in the first dimension'],
+	['nx', '[15, 30, 10]', 'Number of grid points in the first dimension'],
         ['xbound', '[0.1*au,30.*au, 120.0*au, 200*au]', 'Number of radial grid points'],
-        ['ny', '[10,30,30,10]', 'Number of grid points in the first dimension'],
+        ['ny', '[10,20,20,10]', 'Number of grid points in the first dimension'],
         ['ybound', '[0.1, pi/3., pi/2., 2.*pi/3., 3.04]', 'Number of radial grid points'],
-        ['nz', '[61]', 'Number of grid points in the first dimension'],
+        ['nz', '[0]', 'Number of grid points in the first dimension'],
         ['zbound', '[0., 2.0*pi]', 'Number of radial grid points'],
         # gas 
       	['gasspec_mol_name', "['12co','13co','c18o','c17o']", 'name of molecule'],

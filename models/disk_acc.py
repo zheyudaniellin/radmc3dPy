@@ -426,9 +426,20 @@ def getViscousHeating(grid=None, ppar=None):
     wk = np.sqrt(natconst.gg * ppar['mstar'][0] / cyrr**3.)
 
     rhogas = getGasDensity(grid=grid, ppar=ppar)
-    qvis = rhogas * ppar['alph'] * hh**2 * wk**3 * 9./4.
-#    reg = rhogas <= ppar['cutgdens']
-#    qvis[reg] = 0.0
+    reg = rhogas <= ppar['cutgdens']
+
+    if ppar['alph'] >= 0:
+        # use alpha
+        qvis = rhogas * ppar['alph'] * hh**2 * wk**3 * 9./4.
+    else:
+        # use accretion rate [Msun / year]
+        acc = ppar['dM'] * natconst.ms / natconst.year
+        qvis = 3. * acc * wk**2 / 4. / np.pi / np.sqrt(2.*np.pi) / hh * np.exp(-0.5*(zz/hh)**2)
+
+    qvis[reg] = 0.
+    chkqvis = np.isfinite(qvis)
+    if False in chkqvis:
+        raise ValueError('qvis is not finite')
 
 #    vol = grid.getCellVolume()
 #    tol_lum = np.sum(vol*qvis)
