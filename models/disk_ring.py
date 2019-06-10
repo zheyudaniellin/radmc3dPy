@@ -1,9 +1,7 @@
-"""Disk model for spiral protoplanetary disk
-particularly for Elias 2-27
+"""
+disk_ring.py
 
-This template is an empty model, i.e. all model functions return zeros in the appropriate arrays and dimensions. 
-The purpose of this model is to illustrate the names and syntax of the model functions. Hence, this file can
-be a starting point for implementing new models in the library. 
+consider a disk with rings and flat power-law regions
 
 A radmc3dPy model file can contain any / all of the functions below
 
@@ -34,8 +32,6 @@ import traceback
 from .. import dustopac
 from .. import natconst
 import pdb
-import fneq
-from . import DiskEqs
 
 try:
     import numpy as np
@@ -66,50 +62,70 @@ def getDefaultParams():
     parameter which will be written in the comment field of the line when
     a parameter file is written. 
     """
-
     defpar = [
+        # coordinate system
         ['crd_sys', "'sph'", 'Coordinate system'],
-        ['nx', '[30, 60, 50]', 'Number of grid points in the first dimension'],
-        ['xbound', '[0.1*au, 30.*au, 120.*au, 500.*au]', 'Number of radial grid points'],
+        ['nx', '[60, 40, 30]', 'Number of grid points in the first dimension'],
+        ['xbound', '[0.1*au, 30.*au, 110.*au, 250.*au]', 'Number of radial grid points'],
         ['ny', '[10,30, 30, 10]',
            'Number of grid points in the second dimension'],
-        ['ybound', '[2*pi/9., pi/3., pi/2., 2*pi/3., 7*pi/9]',
+        ['ybound', '[0.1, pi/6., pi/2., 5.*pi/6., 3.04]',
            'Number of radial grid points'],
-        ['nz', '[721]', 'Number of grid points in the third dimension'],
-        ['zbound', '[0., 2.0*pi]', 'Number of radial grid points'], 
+        ['nz', '[361]', 'Number of grid points in the third dimension'],
+        ['zbound', '[0., 2.0*pi]', 'Number of radial grid points'],
         # star related
-        ['tstar', '[4000.0]', 'Temperature of star'],
-        ['mstar', '[0.5*ms]', 'Mass of the star(s)'],
+        ['tstar', '[3900.0]', 'Temperature of star'],
+        ['mstar', '[1.0*ms]', 'Mass of the star(s)'],
         ['rstar', '[2.5*rs]', 'Radius of star'],
-        # density
-        ['mdisk', '0.1*ms', 'Total mass of disk'], 
-        ['g2d', '0.01', ' Dust to gas ratio'],
-        ['Rsig', '200*au', ' characteristic radius'], 
-        ['sigp', '0.7', ' exponent value for sigma'],
-        ['cutgdens', '1e-30', 'cut for gas density'], 
-        # spiral
-        ['Rspir', '[84*au, 84*au]', 'R0 of spiral'],
-        ['Rend', '[120*au, 120*au]', 'end of spiral'], 
-        ['bspir', '[0.138, 0.138]', 'R=R0 exp(b theta)'],
-        ['wspir', '[0.3, 0.3]', 'Width of spiral (in rad)'], 
-        ['pspir', '[0, pi]', 'initial phase for the spiral'], 
-        # gaps
-        ['Rgap', '[71*au]', 'Radius of gap'], 
-        ['wgap', '[4*au]', 'FWHM of gap'], 
-        # height
-        ['Ht', '13*au', 'Height'],
-        ['Rt', '100*au', 'Radius for height'], 
-        ['qheight', '1.125', 'powerlaw for height'], 
+        # gas density 
+        ['Rin', '[0.1*au, 80*au]', 'inner bounding edge'],
+        ['Rin_w', '[0, 1*au]', 'gaussian taper before inner edge'], 
+        ['Rout', '[30*au, 120*au]', 'outer bounding edge'],
+        ['Rout_w', '[1*au, 1*au]', 'gaussian taper after outer edge'], 
+        ['sigp', '[-1.0, -1.5]', 'power-law surface density'],
+        ['sig0', '[1e2, 1e1]', 'surface density at Rin in g/cm^2'], 
+        ['ring_r', '[50*au]', 'location of gaussian ring'], 
+        ['ring_win', '[5*au]', 'width of gaussian ring in inner radius'],
+        ['ring_wout', '[5*au]', 'width of gaussian ring in outer radius'], 
+        ['ring_a', '[1e2]', 'surface density at center of ring in g/cm^2]'], 
+        ['cutgdens', '1e-30', 'cut for density'], 
+        ['Rt', '100*au', 'radius for scale height'], 
+        ['Ht', '10*au', 'scale height'],         
+        ['qheight', '1.25', 'height power-law'], 
+        # gas species
+        ['gasspec_mol_name', "['12co']", 'name of molecule'],
+        ['gasspec_mol_abun', '[5e-5]', 'mass abundance '],
+        ['gasspec_mol_dbase_type', "['leiden']", ''],
+        ['gasspec_mol_freezeout_dfact', '[1e-3]',
+         'Factor by which the molecular abundance should be decreased in the freeze-out zone'],
+        ['mol_freeze_Ht', '[24*au]', 'Height at Rt, with index=qheight, for freeze out to happen'],
+        ['mol_freeze_del_hfrac', '0.2', 'Gaussian taper for freeze-out. del H = h * hfrac'],
+        ['mol_snowR', '[20*au]', 'Radius when freeze out begins to happen'],
+        # dust density
+        # flat power-law parts
+        ['dRin', '[0.1*au, 80*au]', 'inner bounding edge'],
+        ['dRin_w', '[0, 1*au]', 'gaussian taper before inner edge'], 
+        ['dRout', '[30*au, 120*au]', 'outer bounding edge'],
+        ['dRout_w', '[1*au, 1*au]', 'gaussian taper after outer edge'], 
+        ['dsigp', '[-1.0, -1.5]', 'power-law surface density'],
+        ['dsig0', '[1e2, 1e1]', 'surface density at Rin'],
+        # ring parts
+        ['dring_r', '[50*au]', 'location of gaussian ring'],
+        ['dring_win', '[5*au]', 'width of gaussian ring in inner radius'],
+        ['dring_wout', '[5*au]', 'width of gaussian ring in outer radius'], 
+        ['dring_a', '[1e2]', 'surface density at center of ring in g/cm^2]'],
+        ['cutddens', '1e-30', 'cut for dust density'],
+        ['dRt', '[100*au]', 'radius for scale height for each grain size'], 
+        ['dHt', '[10*au]', 'scale height for each grain size'], 
+        ['dqheight', '[1.25]', 'scale height power-law for dust'], 
         # temperature
-        ['T0', '13.4', 'Temperature'],
-        ['R0', '200*au', 'Characteristic radius'],
-        ['qtemp', '0.45', 'temperature powerlaw'], 
-        ['cuttemp', '10', 'cut for temperature'],
-        # alignment
-        ['altype', "'toroidal'", 'alignment type']
+        ['T0', '50', 'temperature at Rt'], 
+        ['qtemp', '-0.5', 'temperature power-law index'], 
+        ['cuttemp', '10', 'temperature cut']
               ]
 
     return defpar
+
 
 def getGasTemperature(grid=None, ppar=None):
     """Calculates/sets the gas temperature
@@ -126,15 +142,15 @@ def getGasTemperature(grid=None, ppar=None):
     -------
     Returns the gas temperature in K
     """
-
     mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
     if ppar['crd_sys'] == 'sph':
         rr = mesh[0]
         tt = mesh[1]
         pp = mesh[2]
-        xx = rr * np.sin(tt) * np.sin(pp)
-        yy = rr * np.sin(tt) * np.cos(pp)
-        cyrr = np.sqrt(xx**2. + yy**2)
+        xx = rr * np.sin(tt) * np.cos(pp)
+        yy = rr * np.sin(tt) * np.sin(pp)
+        zz = rr * np.cos(tt)
+        cyrr = np.sqrt(xx**2. + yy**2.)
     elif ppar['crd_sys'] == 'car':
         xx = mesh[0]
         yy = mesh[1]
@@ -144,9 +160,10 @@ def getGasTemperature(grid=None, ppar=None):
     else:
         raise ValueError('crd_sys not specified in ppar')
 
-    tgas = ppar['T0'] * (cyrr / ppar['R0'])**(-ppar['qtemp'])
+    tgas = ppar['T0'] * (cyrr / ppar['Rt'])**(ppar['qtemp'])
     reg = tgas < ppar['cuttemp']
     tgas[reg] = ppar['cuttemp']
+
     return tgas
 
 
@@ -165,7 +182,6 @@ def getDustTemperature(grid=None, ppar=None):
     -------
     Returns the dust temperature in K
     """
-
     op = dustopac.radmc3dDustOpac()
     dinfo = op.readDustInfo()
     ngs = len(dinfo['gsize'])
@@ -176,6 +192,7 @@ def getDustTemperature(grid=None, ppar=None):
         tdust[:,:,:,ig] = tgas
 
     return tdust
+
 
 def getGasAbundance(grid=None, ppar=None, ispec=''):
     """Calculates/sets the molecular abundance of species ispec 
@@ -211,55 +228,31 @@ def getGasAbundance(grid=None, ppar=None, ispec=''):
    
     return gasabun
 
-def getSpiral(cyrr, raxis,ttaaxis,paxis, R0, b0, w0, phase0, Rend):
-    """ R0, b0, w0, Rend, phase0 all in list or numpy array
-        phase0 in radians
-    """
-    nx,ny,nz = cyrr.shape
-    spir = np.zeros([nx,ny,nz], dtype=np.float64)
-    narms = len(R0)
-    if phase0 is None:
-        dphase = 2.*np.pi / narms
-        phase0 = np.arange(narms)*dphase
+def fn_getring(cyrr, ring_r, ring_win, ring_wout, ring_a):
+    ring = cyrr * 0
+    reg = cyrr <= ring_r
+    ring[reg] = ring_a * np.exp(-0.5 * ((cyrr[reg] - ring_r) / ring_win)**2)
+    reg = cyrr > ring_r
+    ring[reg] = ring_a * np.exp(-0.5 * ((cyrr[reg] - ring_r) / ring_wout)**2)
 
-    # let inner component be azimuthally smooth
-    norm = 1. / narms
+    return ring
 
-    for ia in range(narms):
-        spirii = np.zeros([nx,ny,nz], dtype=np.float64)
-        for ix in range(nx):
-            rii = raxis[ix]
-            if rii < R0[ia]:
-                spirii[ix,:,:] = norm
-            elif (rii >= R0[ia] and (rii <= Rend[ia])):
-                for iz in range(nz):
-                    pii = paxis[iz]
-                    phispiral = np.log(rii/R0[ia]) / b0[ia] - phase0[ia]
-                    phispiral = np.mod(phispiral, 2*np.pi)
+def fn_getflat(cyrr, Rin_w, Rin, Rout, Rout_w, sigp, sig0):
+    if Rin >= Rout:
+        raise ValueError('Rin must be less than Rout: %.1e, %.1e'%(Rin, Rout))
+    flat = cyrr * 0
+    reg = (cyrr >= Rin) & (cyrr <= Rout)
+    flat[reg] = sig0 * (cyrr[reg] / Rin)**(sigp)
 
-                    wsig = w0[ia] / (2.*np.sqrt(2*np.log(2.))) #fwhm to wsig
+    if Rin_w != 0:
+        reg = cyrr < Rin
+        flat[reg] = sig0 * np.exp(-((cyrr[reg] - Rin) / Rin_w)**2)
 
-                    pset = np.array([pii-2*np.pi, pii, pii+2.*np.pi], dtype=np.float64)
-                    delp = min(abs(pset -phispiral))
+    if Rout_w != 0:
+        reg = cyrr > Rout
+        flat[reg] = sig0 * (Rout / Rin)**(sigp) * np.exp(-((cyrr[reg] - Rout) / Rout_w)**2)
 
-                    spirii[ix,:,iz] = max(np.exp(-0.5*(delp/wsig)**2), 0.5*norm)
-            else:
-                spirii[ix,:,:] = norm
-
-        spir = spir + spirii
-
-    return spir
-                
-def getGap(cyrr, Rgap, wgap):
-    nx,ny,nz = cyrr.shape
-    gap = np.ones([nx,ny,nz], dtype=np.float64)
-    ngaps = len(Rgap)
-    for ii in range(ngaps):
-        sigma = wgap[ii] / (2.*np.sqrt(2*np.log(2.)))
-        gapii = 1. - np.exp(-0.5*((cyrr - Rgap[ii])/sigma)**2)
-        gap = gap * gapii
-
-    return gap
+    return flat
 
 def getGasDensity(grid=None, ppar=None):
     """Calculates the total gas density distribution 
@@ -276,41 +269,52 @@ def getGasDensity(grid=None, ppar=None):
     -------
     Returns the gas volume density in g/cm^3
     """
-
     mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
     if ppar['crd_sys'] == 'sph':
         rr = mesh[0]
         tt = mesh[1]
         pp = mesh[2]
-        xx = rr * np.sin(tt) * np.cos(pp)
-        yy = rr * np.sin(tt) * np.sin(pp)
+        xx = rr * np.sin(tt) * np.sin(pp)
+        yy = rr * np.sin(tt) * np.cos(pp)
         zz = rr * np.cos(tt)
-        cyrr = np.sqrt(xx**2. + yy**2.)
+        cyrr = np.sqrt(xx**2. + yy**2)
     elif ppar['crd_sys'] == 'car':
         xx = mesh[0]
         yy = mesh[1]
         zz = mesh[2]
-        rr = np.sqrt(xx**2 + yy*2 + zz**2)
-        cyrr = np.sqrt(xx**2 + yy**2)
+        rr = np.sqrt(xx**2 + yy**2 + zz**2)
+        cyrr = np.sqrt(xx**2. + yy**2.)
     else:
-        raise ValueError('crd_sys not specified')
-    
-    hh = ppar['Ht'] * (cyrr / ppar['Rt'])**(ppar['qheight'])
-    sig_cyrr = fneq.eq_sig(cyrr, ppar['mdisk'], xx.min(), ppar['Rsig'],
-        xx.max(), ppar['sigp'], 1)
+        raise ValueError('crd_sys not specified in ppar')
 
-#    armpart = getSpiral(cyrr, pp, ppar['Rspir'], ppar['bspir'], ppar['wspir'])
-    armpart = getSpiral(cyrr, grid.x, grid.y, grid.z, ppar['Rspir'], ppar['bspir'], ppar['wspir'], ppar['pspir'], ppar['Rend']) 
+    # calculate scale height
+    hh = ppar['Ht'] * (cyrr / ppar['Rt'])**ppar['qheight']
 
-    gappart = getGap(cyrr, ppar['Rgap'], ppar['wgap'])
+    # calculate surface density
+    nflat = len(ppar['Rin'])
+    flat = cyrr * 0.
+    for ii in range(nflat):
+        flatii = fn_getflat(cyrr, ppar['Rin_w'][ii], ppar['Rin'][ii], 
+            ppar['Rout'][ii], ppar['Rout_w'][ii], 
+            ppar['sigp'][ii], ppar['sig0'][ii])
+        flat = flat + flatii
 
-    rhogas = sig_cyrr * armpart * gappart / np.sqrt(2.*np.pi) / hh * np.exp(-0.5*(zz/hh)**2)
-    vol = grid.getCellVolume()
-    sumd = rhogas * vol
-    rat = ppar['mdisk'] / sumd.sum()
-    rhogas = rhogas * rat
+    nring = len(ppar['ring_r'])
+    ring = cyrr * 0
+    for ii in range(nring):
+        ringii = fn_getring(cyrr, ppar['ring_r'][ii], 
+            ppar['ring_win'][ii],ppar['ring_wout'][ii], 
+            ppar['ring_a'][ii])
+        ring = ring + ringii
+
+    sig = flat + ring
+
+    rhogas = sig / np.sqrt(2.*np.pi) / hh * np.exp(-0.5 * (zz / hh)**2)
+    reg = rhogas < ppar['cutgdens']
+    rhogas[reg] = ppar['cutgdens']
 
     return rhogas
+
 
 def getDustDensity(grid=None, ppar=None):
     """Calculates the dust density distribution 
@@ -327,16 +331,15 @@ def getDustDensity(grid=None, ppar=None):
     -------
     Returns the dust volume density in g/cm^3
     """
-
     mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
     if ppar['crd_sys'] == 'sph':
         rr = mesh[0]
         tt = mesh[1]
         pp = mesh[2]
-        xx = rr * np.sin(tt) * np.cos(pp)
-        yy = rr * np.sin(tt) * np.sin(pp)
+        xx = rr * np.sin(tt) * np.sin(pp)
+        yy = rr * np.sin(tt) * np.cos(pp)
         zz = rr * np.cos(tt)
-        cyrr = np.sqrt(xx**2. + yy**2.)
+        cyrr = np.sqrt(xx**2. + yy**2)
     elif ppar['crd_sys'] == 'car':
         xx = mesh[0]
         yy = mesh[1]
@@ -346,15 +349,40 @@ def getDustDensity(grid=None, ppar=None):
     else:
         raise ValueError('crd_sys not specified in ppar')
 
+    # calculate surface density
+    nflat = len(ppar['dRin'])
+    flat = cyrr * 0.
+    for ii in range(nflat):
+        flatii = fn_getflat(cyrr, ppar['dRin_w'][ii], ppar['dRin'][ii], 
+            ppar['dRout'][ii], ppar['dRout_w'][ii], 
+            ppar['dsigp'][ii], ppar['dsig0'][ii])
+        flat = flat + flatii
+
+    nring = len(ppar['dring_r'])
+    ring = cyrr * 0
+    for ii in range(nring):
+        ringii = fn_getring(cyrr, ppar['dring_r'][ii], 
+            ppar['dring_win'][ii], ppar['dring_wout'][ii], 
+            ppar['dring_a'][ii])
+        ring = ring + ringii
+
+    sig = flat + ring
+
+    # calculate the dust density
     op = dustopac.radmc3dDustOpac()
     dinfo = op.readDustInfo()
     ngs = len(dinfo['gsize'])
     dweights = dinfo['dweights']
 
-    rhogas = getGasDensity(grid=grid, ppar=ppar)
     rhodust = np.zeros([grid.nx, grid.ny, grid.nz, ngs], dtype=np.float64) 
     for ig in range(ngs):
-        rhodust[:, :, :, ig] = rhogas * ppar['g2d']
+        hhii = ppar['dHt'][ig] * (cyrr / ppar['dRt'][ig])**ppar['dqheight'][ig]
+        rho_ig = sig / np.sqrt(2.*np.pi) / hhii * np.exp(-0.5*(zz/hhii)**2)
+        rhodust[:,:,:,ig] = rho_ig * dweights
+
+    reg = rhodust < ppar['cutddens']
+    rhodust[reg]= ppar['cutddens']
+
     return rhodust
 
 def getVTurb(grid=None, ppar=None):
@@ -395,18 +423,3 @@ def getVelocity(grid=None, ppar=None):
 
     vel = np.zeros([grid.nx, grid.ny, grid.nz, 3], dtype=np.float64)
     return vel
-
-def getDustAlignment(grid=None, ppar=None):
-    # check inputs from ppar
-    if 'crd_sys' not in ppar:
-        raise ValueError('crd_sys is not in ppar')
-    else:
-        crd_sys = ppar['crd_sys']
-    if 'altype' not in ppar:
-        altype = '0'
-    else:
-        altype = ppar['altype']
-
-    alvec = DiskEqs.eqDustAlignment(crd_sys, grid.x, grid.y, grid.z, altype, ppar)
-    return alvec
-

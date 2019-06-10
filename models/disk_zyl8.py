@@ -89,13 +89,19 @@ def getDefaultParams():
         ['Router', '70.0*au', ' Outer radius of the disk'],	      	
 	['Rsig', '30.*au', ' characteristic radius for exponential tapering sigam'], 
 	['sigp', '0.2', 'exponent value for sigma'],
+        ['sigp2', '0.8', '2nd exponent for some sigma types'], 
 	['mdisk', '0.05*ms', 'mass of disk'],
 	['sigma_type', '0', '0-polynomial, 1-exponential tapering'],
         ['cutgdens', '1e-30', 'cut for gas density'],
         # envelope
+        ['envmode', '0', '0: Ulrich model. 1: oblate sphere'], 
         ['dMenv', '5e-6', 'envelope accretion rate onto disk [Msun/year]'], 
         ['rhoRc', '5e-16', 'Density at Rc. This is used if dMenv is < 0'], 
         ['Rc', '50.*au', 'Radius where infall velocity equals rotation velocity'],
+        ['envq_1', '-1.5', 'envelope radial exponent'], 
+        ['eta', '0.3', 'z/r for oblate sphere'], 
+        # cavity
+        ['cavmode', '0', '0 to turn off. 1 for power-law'], 
         ['Rcav', '50*au', 'radius for cavity. set to less than 0 to not include cavity'],
         ['Hcav', '50*au', 'height for cavity'],
         ['qcav', '2.0', 'power index for cavity'],
@@ -111,6 +117,7 @@ def getDefaultParams():
         # height
 	['H0', '7.5*au', 'height at Rt'],
 	['qheight', '1.125', 'height exponent'],
+        ['hmode', "'0'", 'different height mode'], 
 	['zqratio', '3.0', 'multiple of scale height for temperature transition'],
 	['hdel', '2.0', 'power of transition for temperature'],
         # alignment
@@ -265,7 +272,7 @@ def getGasAbundance(grid=None, ppar=None, ispec=''):
 
     return gasabun
 
-def fn_scaleheight(cyrr, Rt, Ht, qheight, Router, Hd, mode='1'):
+def fn_scaleheight(cyrr, Rt, Ht, qheight, Router, Hd, mode='0'):
     """
     scale height as a function of cylindrical radius
 
@@ -342,10 +349,10 @@ def getGasDensity(grid=None, ppar=None):
 
     rhogas = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64) + 1e-30
     hh = fn_scaleheight(cyrr, ppar['Rt'], ppar['H0'], ppar['qheight'], 
-            ppar['Router'], 0, mode='0')
+            ppar['Router'], 5., mode=ppar['hmode'])
 
     sig_cyrr = fneq.eq_sig(cyrr, ppar['mdisk'], ppar['Rinner'], ppar['Rsig'], 
-        ppar['Router'], ppar['sigp'], ppar['sigma_type'])
+        ppar['Router'], ppar['sigp'], ppar['sigma_type'], sigp2=ppar['sigp2'])
 
     reg = hh > 0
     rhogas[reg] = sig_cyrr[reg] / np.sqrt(2.*np.pi) / hh[reg] * np.exp(-0.5*(zz[reg]/hh[reg])**2.)
@@ -355,22 +362,27 @@ def getGasDensity(grid=None, ppar=None):
     rhogas[reg] = ppar['cutgdens']
 
     # include envelope
-    r2d = rr[:,:,0]
-    t2d = tt[:,:,0]
-    if ppar['dMenv'] >= 0:
-        GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
-        dMenv = ppar['dMenv'] * natconst.ms / natconst.year
-        rhoRc = dMenv / (8.*np.pi) / np.sqrt(GMR3)
-    else:
-        rhoRc = ppar['rhoRc']
-    if ppar['Rcav'] > 0:
-        cavpar = [ppar['Rcav'], ppar['Hcav'], ppar['qcav'], ppar['Hoff'], ppar['delHcav']]
-    else:
-        cavpar = None
-    envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc, cavpar=cavpar)
-    for ip in range(grid.nz):
-        rhoin = rhogas[:,:,ip]
-        rhogas[:,:,ip] = rhogas[:,:,ip] + envdens2d
+    if ppar['envmode'] == 0:	# Ulrich model
+        r2d = rr[:,:,0]
+        t2d = tt[:,:,0]
+        if ppar['dMenv'] >= 0:
+            GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
+            dMenv = ppar['dMenv'] * natconst.ms / natconst.year
+            rhoRc = dMenv / (8.*np.pi) / np.sqrt(GMR3)
+        else:
+            rhoRc = ppar['rhoRc']
+        envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc, envq_1=ppar['envq_1'])
+
+        for ip in range(grid.nz):
+            rhoin = rhogas[:,:,ip]
+            rhogas[:,:,ip] = rhogas[:,:,ip] + envdens2d
+    elif ppar['envmode'] == 1:	# oblate model
+        rhogas = DiskEqs.eqOblateDens(cyrr, zz, ppar['rhoRc'], ppar['Rc'], ppar['eta'], ppar['envq_1'])
+    
+    # cavity
+    fac = DiskEqs.eqCavity(cyrr, zz, ppar)
+
+    rhogas = rhogas * fac
 
     # flag out regions lower than cutgdens
     reg = rhogas < ppar['cutgdens']
@@ -418,43 +430,46 @@ def getDustDensity(grid=None, ppar=None):
     op = dustopac.radmc3dDustOpac()
     dinfo = op.readDustInfo()
     ngs = len(dinfo['gsize'])
+    dweights = dinfo['dweights']
 
     # create dust distribution
     rhodust = np.zeros([grid.nx, grid.ny, grid.nz, ngs], dtype=np.float64) 
 
+    # cavity 
+    cavfac = DiskEqs.eqCavity(cyrr, zz, ppar)
+
     # envelope component
-    r2d = rr[:,:,0]
-    t2d = tt[:,:,0]
-    if ppar['dMenv'] >= 0:
-        GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
-        dMenv = ppar['dMenv'] * natconst.ms / natconst.year
-        rhoRc = dMenv / (4.*np.pi) / np.sqrt(GMR3)
-    else:
-        rhoRc = ppar['rhoRc']
-    if ppar['Rcav'] > 0:
-        cavpar = [ppar['Rcav'], ppar['Hcav'], ppar['qcav'], ppar['Hoff'], ppar['delHcav']]
-    else:
-        cavpar = None
-    rho_env2d, cavmask2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc, cavpar=cavpar)
-    rho_env2d = rho_env2d * ppar['g2d']
+    rho_env3d = cyrr * 0 
+    if ppar['envmode'] == 0:    # Ulrich model
+        r2d = rr[:,:,0]
+        t2d = tt[:,:,0]
+        if ppar['dMenv'] >= 0:
+            GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
+            dMenv = ppar['dMenv'] * natconst.ms / natconst.year
+            rhoRc = dMenv / (8.*np.pi) / np.sqrt(GMR3)
+        else:
+            rhoRc = ppar['rhoRc']
+        envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc)
+        for ip in range(grid.nz):
+            rho_env3d[:,:,ip] = envdens2d
+
+    elif ppar['envmode'] == 1:  # oblate model
+        rho_env3d = DiskEqs.eqOblateDens(cyrr, zz, ppar['rhoRc'], ppar['Rc'], ppar['eta'], ppar['envq_1'])
+
+    rho_env3d = rho_env3d * ppar['g2d'] * cavfac
 
     # disk component
     hh = fn_scaleheight(cyrr, ppar['Rt'], ppar['H0'], ppar['qheight'],
-            ppar['Router'], 0, mode='0')
+            ppar['Router'], 5., mode=ppar['hmode'])
 
     sig_cyrr = fneq.eq_sig(cyrr, ppar['mdisk'], ppar['Rinner'], ppar['Rsig'],
-        ppar['Router'], ppar['sigp'], ppar['sigma_type'])
+        ppar['Router'], ppar['sigp'], ppar['sigma_type'], sigp2=ppar['sigp2'])
 
-    rho_disk = sig_cyrr / np.sqrt(2.*np.pi) / hh * np.exp(-0.5*(zz/hh)**2.)
-    rho_disk = rho_disk * ppar['g2d']
+    rho_disk = sig_cyrr * 0
+    reg = hh > 0
+    rho_disk[reg] = sig_cyrr[reg] / np.sqrt(2.*np.pi) / hh[reg] * np.exp(-0.5*(zz[reg]/hh[reg])**2.)
 
-    # multiply by the cavity mask
-    for ip in range(grid.nz):
-        rho_disk[:,:,ip] = rho_disk[:,:,ip] * cavmask2d
-
-    rho_env3d = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64)
-    for ip in range(grid.nz):
-        rho_env3d[:,:,ip] = rho_env2d
+    rho_disk = rho_disk * ppar['g2d'] * cavfac
 
     # decide on how to add it together
     if ngs == 1:
@@ -466,6 +481,9 @@ def getDustDensity(grid=None, ppar=None):
         ig = 1 # second one for disk
         rhodust[:,:,:,ig] = rho_disk
     else:
+        # same for all?
+#        for ig in range(ngs):
+#            rhodust[:,:,:,ig] = (rho_env3d + rho_disk) * dweights[ig]
         raise ValueError('number of grains can only be less than 2 for this model')
 
     # flag out regions lower than cutgdens

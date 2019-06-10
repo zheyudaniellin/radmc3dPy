@@ -81,7 +81,7 @@ def getDefaultParams():
         # dust density related
         ['width', '80*au', 'length in x and y'],
         ['zlen', '[40*au, 40*au]', 'thickness for each slab'],
-        ['rh0', '[1e-15, 1e-15]', 'rho for each slab'], 
+        ['rho0', '[1e-15, 1e-15]', 'rho for each slab'], 
         ['T0', '[50, 50]', 'temperature']
               ]
 

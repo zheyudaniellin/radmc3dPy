@@ -82,6 +82,8 @@ except ImportError:
     print('Ellipse cannot be imported from matplotlib.patches')
     print('Without this you cannot plot ellipses onto images')
 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 from . import natconst as nc
 
 class radmc3dImage(object):
@@ -461,14 +463,14 @@ class radmc3dImage(object):
                     data[0,0,:,:] = self.image[:,:,istokes, 0] * conv
                 else:
                     for inu in range(self.nfreq):
-                        data[inu, 0, :, :] = self.image[:,:,istokes, inu]
+                        data[0, inu, :, :] = self.image[:,:,istokes, inu] * conv
             else:
                 if self.nfreq == 1:
                     data[0, 0, :, :] = self.image[:, :, 0] * conv
                 else:
                     for inu in range(self.nfreq):
-                        data[inu, 0, :, :] = self.image[:, :, inu] * conv
-        else:
+                        data[0, inu, :, :] = self.image[:, :, inu] * conv
+        else: # if not casa
             data = np.zeros([self.nfreq, self.ny, self.nx], dtype=float)
             if self.stokes:
                 if stokes.strip().upper() != 'PI':
@@ -1077,6 +1079,89 @@ class radmc3dImage(object):
         self.y = ((np.arange(self.ny, dtype=np.float64) + 0.5) - self.ny / 2) * self.sizepix_y
 
 
+    def readSpectrum(self, fname=None, binary=False, dpc=1.):
+        """
+        reads the spectrum.out file for the spectrum. note the data structure is different from ordinary images, but this will still use the image object
+        
+        Parameters
+        ----------
+
+        fname   : str, optional
+                 File name of the radmc3d output image (if omitted 'spectrum.out' is used)
+
+        binary  : bool, optional
+                 False - the image format is formatted ASCII if True - C-compliant binary (omitted if old=True)
+
+        dpc     : float. Default 1
+                  Distance to source in pc for calculating flux per pixel. 
+
+        """
+        if binary:
+            if fname is None:
+                fname = 'spectrum.bout'
+            raise ValueError('binary file for spectrum is not done yet')
+
+        else:
+            # Look for the image file
+
+            if fname is None:
+                fname = 'spectrum.out'
+
+            print('Reading '+ fname)
+
+            self.filename = fname
+            with open(fname, 'r') as rfile:
+
+                dum = ''
+
+                # Format number
+                iformat = int(rfile.readline())
+
+                if iformat == 1:
+                    self.stokes = False
+
+                # number of wavelengths
+                nwav = int(rfile.readline())
+                self.nwav = nwav
+                self.wav = np.zeros([self.nwav], dtype=np.float64)
+
+                self.image = np.zeros([1, 1, self.nwav], dtype=np.float64)
+
+                # Blank line
+                dum = rfile.readline()
+
+                for iwav in range(self.nwav):
+                    # actual data
+                    dum = rfile.readline()
+                    dum = dum.split()        
+                    self.wav[iwav] = float(dum[0])
+                    self.image[0, 0, iwav] = float(dum[1])
+
+                # calculate frequency
+                self.nfreq = nwav
+                self.freq = nc.cc * 1e4 / self.wav
+
+                # dimensions
+                self.nx = 1
+                self.ny = 1
+                self.sizepix_x = 0.
+                self.sizepix_y = 0.
+                self.x = 0.
+                self.y = 0.
+
+                # distance
+                self.dpc = dpc
+
+                # stokes
+                self.stokes = False
+
+                # total flux
+                self.totflux = np.squeeze(self.image)
+
+                # image in jansky
+                self.imageJyppix = self.image * nc.jy
+
+
     def imConv(self, dpc=1., psfType='gauss', fwhm=None, pa=None, tdiam_prim=8.2, tdiam_sec=0.94):
         """Convolves a RADMC-3D image with a two dimensional Gaussian psf. The output images will have the same
         brightness units as the input images.
@@ -1639,7 +1724,7 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
     return res
 
 def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=None, color='w', nx=20, ny=20, 
-    turn90=False, polunitlen=-1, textcolor='k', textxy=None, ax=None):
+    turn90=False, polunitlen=-1, quivwidth=0.005, textcolor='k', textxy=None, ax=None):
     """
     Function to plot the polarisation direction for full stokes images
 
@@ -1770,6 +1855,9 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
     else:
         vlen = lpol * 100. / polunitlen  #polunitlen is in percent
         pltlen = str(polunitlen) + '%'
+
+    if quivwidth is None:
+        quivwidth = 0.005
          
     vx = vlen * np.cos(ang)
     vy = vlen * np.sin(ang)
@@ -1782,8 +1870,10 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
     if ax is None:
         ax = plt.gca()
 
-    ax.quiver(xxr, yyr, vx, vy, color=color, pivot='mid', scale=1.25 * np.max([nx, ny]), headwidth=1e-10,
-               headlength=1e-10, headaxislength=1e-10)
+    ax.quiver(xxr, yyr, vx, vy, color=color, 
+        pivot='mid', scale=1.25 * np.max([nx, ny]),
+        width=quivwidth, 
+        headwidth=1e-10, headlength=1e-10, headaxislength=1e-10)
 
 
     # set up the text 
@@ -2289,7 +2379,9 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
         if nocolorbar is True:
             cbar = None
         else:
-            cbar = plt.colorbar(implot)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            cbar = plt.colorbar(implot , cax=cax)
             cbar.set_label(cb_label)
 
         # over plot the normalization values
@@ -2309,7 +2401,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
             else: 
                     plottotflux = image.totflux[ifreq]
             plottotflux = '%.2e Jy' % plottotflux
-            plt.text(x.max()*0.7, y.max()*0.9, plottotflux, color=textcolor, va='bottom', ha='right')
+            #plt.text(x.max()*0.7, y.max()*0.9, plottotflux, color=textcolor, va='bottom', ha='right')
 
         # overplotting beam
         if (oplotbeam is not None) & (len(image.fwhm) != 0):
@@ -2337,7 +2429,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
             # coordinate of the beam
             if beamxy is None:
                 ellx = x.min()*0.75
-                elly = y.min()*0.7
+                elly = y.min()*0.55
             else:
                 ellx = beamxy[0]
                 elly = beamxy[1]
@@ -2863,10 +2955,99 @@ def plotTausurf(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=
     elif isinstance(image, radmc3dCircimage):
         raise ValueError('this is not implemented. need to copy and paste stuff in plotImage')
 
+def plotSpectrum(image=None, ax=None, pltx='wav', plty='fnu', pltyunit='cgs', 
+        **kwargs):
+    """ plots the spectrum 
+    Parameters
+    ----------
+    image : radmc3dImage object
+    pltx : string
+            'wav': wavelength [micron]
+            'freq': frequency [GHz]
+            'ev': electronvolt
+    plty : string
+            'fnu': plot spectrum as flux at a certain distance
+            'nufnu': plot flux x nu
+            'lnu':  plot spectrum as luminosity
+    pltyunit : string
+            for fluxes (fnu, nufnu)
+                'cgs': usual cgs [default]
+                'jy' : jansky when plotting in flux
+            for luminosities (lnu, nulnu)
+                'cgs': in [default]
+                'lsun' : solar luminosity for luminosity
+
+    ax : matplotlib axes object (optional)
+    """
+    if ax is None:
+        ax = plt.gca()
+
+    if pltx is 'wav':
+        xaxis = image.wav
+        xlabel = r'log(Wavelength [$\mu m]$)'
+    elif pltx is 'freq':
+        xaxis = image.freq / 1e9
+        xlabel = r'log(Frequency [GHz])'
+    elif pltx is 'ev':
+        xaxis = 4.13566553853599E-15 * image.freq
+        xlabel = 'log(Frequency [eV])'
+    else:
+        raise ValueError('option for pltx is unapplicable')
+
+    spec = np.squeeze(image.image)
+
+    if plty is 'fnu':
+        ydata = spec / image.dpc**2
+        if pltyunit is 'cgs':
+            ylabel = r'$log(F_{\nu} [erg cm^{-2} s^{-1} Hz^{-1}])$'
+        elif pltyunit is 'jy':
+            ydata = ydata / nc.jy
+            ylabel = r'$log(F_{\nu} [jy])$'
+        else:
+            raise ValueError('pltyunit not applicable')
+    elif plty is 'nufnu':
+        ydata = spec * image.freq
+        if pltyunit is 'cgs':
+            ylabel = r'$log(\nu F_{\nu} [Hz x erg cm^{-2} s^{-1} Hz^{-1}])$'
+        elif pltyunit is 'jy':
+            ydata = ydata / nc.jy
+            ylabel = r'$log(\nu F_{\nu} [jy Hz])$'
+        else:
+            raise ValueError('pltyunit not applicable')
+    elif plty is 'lnu':
+        ydata = spec * image.dpc**2 * 4. * np.pi * nc.pc**2
+        if pltyunit is 'cgs':
+            ylabel = r'$log(L_{\nu} [erg cm^{-2} s^{-1} Hz^{-1}])$'
+        elif pltyunit is 'lsun':
+            ydata = ydata / nc.ls
+            ylabel = r'$log(L_{\nu} [Lsun Hz^{-1}])$'
+        else:
+            raise ValueError('pltyunit not applicable')
+    elif plty is 'nulnu':
+        ydata = spec * image.dpc**2 * 4. * np.pi * nc.pc**2 * image.freq
+        if pltyunit is 'cgs':
+            ylabel = r'$log(\nu L_{\nu} [Hz x erg cm^{-2} s^{-1} Hz^{-1}])$'
+        elif pltyunit is 'lsun':
+            ydata = ydata / nc.ls
+            ylabel = r'$log(\nu L_{\nu} [Lsun])$'
+        else: 
+            raise ValueError('pltyunit not applicable')
+
+    # plotting
+    ax.plot(xaxis, ydata, **kwargs)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    return {'specplot': ax}
+
+    
 def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None, pointau=None,
               fluxcons=True, nostar=False, noscat=False, secondorder=1,
               widthkms=None, linenlam=None, vkms=None, imolspec=None, iline=None,
               lambdarange=None, nlam=None, loadlambda=False, stokes=False, doppcatch=False,
+              maxnrscat=None, nphot_scat=None, 
               binary=False, fname='', 
               tausurf=-1, tracetau=False, tracecolumn=False):
     """Calculates a rectangular image with RADMC-3D 
@@ -3005,10 +3186,6 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
             msg = 'lambdarange must have two and only two elements'
             raise ValueError(msg)
 
-    if sizeau is None:
-        msg = 'Unknown sizeau.'
-        raise ValueError(msg)
-
     #
     # Kees' fix for the case when a locally compiled radmc3d exists in the current directory
     #
@@ -3031,7 +3208,9 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
 
     com = com + ' npix ' + str(int(npix))
     com = com + ' incl ' + str(incl)
-    com = com + ' sizeau ' + str(sizeau)
+
+    if sizeau is not None:
+        com = com + ' sizeau ' + str(sizeau)
 
     if wav is not None:
         com = com + ' lambda ' + str(wav)
@@ -3092,6 +3271,12 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
     if secondorder:
         com = com + ' secondorder'
 
+    if maxnrscat is not None:
+        com = com + ' maxnrscat %d'%maxnrscat
+
+    if nphot_scat is not None:
+        com = com + ' nphot_scat %d'%nphot_scat
+
     print('executing command: '+com)
 
     #
@@ -3121,7 +3306,6 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
     print('Resulting file: '+fname)
 
     return 0
-
 
 def cmask(im=None, rad=0.0, au=False, arcsec=False, dpc=None):
     """Simulates a coronographic mask.
@@ -3195,6 +3379,114 @@ def makeMovie():
 
 def plotMovie():
     return True
+
+def makeSpectrum(npix=None, incl=None, wav=None, sizeau=None, 
+              phi=None, posang=None, pointau=None,
+              fluxcons=True, nostar=False, noscat=False, secondorder=1,
+              lambdarange=None, nlam=None, loadlambda=False,
+              binary=False, fname=''):
+    """ creates spectrum based on radmc3d
+    Parameters
+    ----------
+    
+    """
+    #
+    # The basic keywords that should be set
+    #
+    if npix is None:
+        msg = 'Unkonwn npix. Number of pixels must be set.'
+        raise ValueError(msg)
+
+    if incl is None:
+        msg = 'Unkonwn incl. Inclination angle must be set.'
+        raise ValueError(msg)
+
+    if wav is None:
+        if (lambdarange is None) & (nlam is None) & (loadlambda is False):
+            msg = 'should specify wavelength, either by wav, lambdarange, nlam, or loadlambda'
+            raise ValueError(msg)
+    else:
+        if lambdarange is not None:
+            msg = 'Either lambdarange or wav should be set but not both'
+            raise ValueError(msg)
+
+    if lambdarange is not None:
+        if len(lambdarange) != 2:
+            msg = 'lambdarange must have two and only two elements'
+            raise ValueError(msg)
+
+    if sizeau is None:
+        msg = 'Unknown sizeau.'
+        raise ValueError(msg)
+
+    com = ''
+    com = com + 'radmc3d spectrum'
+
+    com = com + ' npix ' + str(int(npix))
+    com = com + ' incl ' + str(incl)
+    com = com + ' sizeau ' + str(sizeau)
+
+    if wav is not None:
+        com = com + ' lambda ' + str(wav)
+    elif (lambdarange is not None) & (nlam is not None):
+        com = com + ' lambdarange ' + str(lambdarange[0]) + ' ' + str(lambdarange[1]) + ' nlam ' + str(int(nlam))
+    elif loadlambda is not False:
+        com = com + ' loadlambda'
+
+    #
+    # Now add additional optional keywords/arguments
+    #
+    if phi is not None:
+        com = com + ' phi ' + str(phi)
+
+    if posang is not None:
+        com = com + ' posang ' + str(posang)
+
+    if pointau is not None:
+        if len(pointau) != 3:
+            msg = ' pointau should be a list of 3 elements corresponding to the  cartesian coordinates of the ' \
+                  + 'image center'
+            raise ValueError(msg)
+        else:
+            com = com + ' pointau ' + str(pointau[0]) + ' ' + str(pointau[1]) + ' ' + str(pointau[2])
+    else:
+        com = com + ' pointau 0.0  0.0  0.0'
+
+    if fluxcons:
+        com = com + ' fluxcons'
+
+    if binary:
+        com = com + ' imageunform'
+
+    if nostar:
+        com = com + ' nostar'
+
+    if noscat:
+        com = com + ' noscat'
+
+    if secondorder:
+        com = com + ' secondorder'
+
+    print('executing command: '+com)
+
+    #
+    # Now finally run radmc3d and calculate the image
+    #
+    # dum = sp.Popen([com], stdout=sp.PIPE, shell=True).wait()
+    dum = sp.Popen([com], shell=True).wait()
+
+    if os.path.isfile('spectrum.out') is False:
+        msg = 'Did not succeed in making spectrum. \n'
+        msg = msg + 'Failed command: '+com
+        raise ValueError(msg)
+
+    if fname != '':
+        os.system('mv spectrum.out '+fname)
+
+    print('Ran command: '+com)
+    print('Resulting file: '+fname)
+
+    return 0
 
 def writeCameraWavelength(camwav=None, fdir=None):
     """ writes camera_wavelength_micron.inp for this list of wavelengths

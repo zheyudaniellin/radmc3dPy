@@ -1,4 +1,8 @@
-"""Envelope
+"""planeparallel.py
+
+to set up planeparallel model. 
+Constant density and constant temperature
+can include different grain sizes at various locations
 
 A radmc3dPy model file can contain any / all of the functions below
 
@@ -27,8 +31,6 @@ from __future__ import print_function
 import traceback
 
 from .. import dustopac
-from .. import natconst
-from . import DiskEqs
 import pdb
 
 try:
@@ -62,37 +64,21 @@ def getDefaultParams():
     """
 
     defpar = [
-        ['crd_sys', "'sph'", 'Coordinate system'],
-        ['nx', '[30, 60, 10]', 'Number of grid points in the first dimension'],
-        ['xbound', '[0.1*au,30.*au, 120.0*au, 200*au]', 'Number of radial grid points'],
-        ['ny', '[10,30,30,10]', 'Number of grid points in the first dimension'],
-        ['ybound', '[0.1, pi/3., pi/2., 2.*pi/3., 3.04]', 'Number of radial grid points'],
-        ['nz', '[61]', 'Number of grid points in the first dimension'],
-        ['zbound', '[0., 2.0*pi]', 'Number of radial grid points'],
-        # star
-        ['tstar', '[5000.0]', 'Temperature of star'],
-        ['mstar', '[2.0*ms]', 'Mass of the star(s)'],
-        ['rstar', '[2.0*rs]', 'Radius of star'],
-        # density 
-        ['densmode', '0', 'different density modes. 0 for Ulrich. 1 for oblate sphere'],
-        ['g2d', '0.01', ' Dust to Gas ratio'],
-        ['rho0', '1e-16', 'characteristic density'],
-        ['Rct', '30*au', 'radius for envelope. corotation radius for mode 1.'], 
-        ['envq', '-2', 'envelope radial exponent for mode 2'], 
-        ['eta', '0.3', 'height to radius of oblate sphere for mode 2'], 
-        ['cutgdens', '1e-30', 'cut for gas density'],
-        # cavity
-        ['cavmode', '0', 'cavity mode. 0 to turn off. 1 for power-law'], 
-        ['Rcav', '50*au', 'radius for cavity. set to less than 0 to not include cavity'],
-        ['Hcav', '50*au', 'height for cavity'],
-        ['qcav', '2.0', 'power index for cavity'],
-        ['Hoff', '0', 'height offset'],
-        ['delHcav', '5*au', 'length scale in height for taper'],
-        # temperature related
-        ['Rt','20.*au', ' characteristic radius for temperature, height'],
-        ['T0', '105.', 'temperature at Rt'], #with dM=5e-6, T=30 at 20au
-        ['qtemp', '-0.5', 'midplane temperature exponent'],
-        ['cuttemp', '10', 'temperature cut'],
+        # coordinate system
+        ['crd_sys', "'ppl'", 'Coordinate system'],
+        ['nx', '[1]', 'Number of grid points in the first dimension'],
+        ['xbound', '[-1e90, 1e90]', 'Number of x grid points'],
+        ['ny', '[1]', 'Number of grid points in the second dimension'],
+        ['ybound', '[-1e90, 1e90]', 'Number of y grid points'],
+        ['nz', '[100]', 'Number of grid points in the third dimension'],
+        ['zbound', '[0., 1*au]', 'value for z grid walls'],
+        # density
+        ['rho0', '[1e-15]', 'density for various grain sizes'], 
+        # temperature
+        ['T0', '[100]', 'temperature'],
+        # locations for various dust grains
+        ['dztop', '[1*au]', 'location of top for various grains'], 
+        ['dzbot', '[0]', 'location of bottom for various grains']
               ]
 
     return defpar
@@ -114,23 +100,7 @@ def getGasTemperature(grid=None, ppar=None):
     Returns the gas temperature in K
     """
 
-    mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
-    if ppar['crd_sys'] == 'sph':
-        rr = mesh[0]
-        tt = mesh[1]
-        pp = mesh[2]
-    elif ppar['crd_sys'] == 'car':
-        xx = mesh[0]
-        yy = mesh[1]
-        zz = mesh[2]
-        rr = np.sqrt(xx**2 + yy**2 + zz**2)
-        cyrr = np.sqrt(xx**2. + yy**2.)
-    else:
-        raise ValueError('crd_sys not specified in ppar')
-
-    tgas = ppar['T0'] * (rr/ppar['Rt'])**(ppar['qtemp'])
-    reg = tgas < ppar['cuttemp']
-    tgas[reg] = ppar['cuttemp']
+    tgas = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64) + 1.0
     return tgas
 
 
@@ -149,15 +119,21 @@ def getDustTemperature(grid=None, ppar=None):
     -------
     Returns the dust temperature in K
     """
+    if ppar['crd_sys'] != 'ppl':
+        raise ValueError('crd_sys must be "ppl" for this model')
 
+    tcut = 1. 
     op = dustopac.radmc3dDustOpac()
     dinfo = op.readDustInfo()
     ngs = len(dinfo['gsize'])
 
     tdust = np.zeros([grid.nx, grid.ny, grid.nz, ngs], dtype=np.float64)
-    tgas = getGasTemperature(grid=grid, ppar=ppar)
     for ig in range(ngs):
-        tdust[:,:,:,ig] = tgas
+        for iz in range(grid.nz):
+            if (grid.z[iz] <= ppar['dztop'][ig]) and (grid.z[iz] >= ppar['dzbot'][ig]): 
+                tdust[:,:,iz,ig] = ppar['T0'][ig]
+            else:
+                tdust[:,:,iz,ig] = tcut
 
     return tdust
 
@@ -213,52 +189,7 @@ def getGasDensity(grid=None, ppar=None):
     Returns the gas volume density in g/cm^3
     """
     
-    mesh = np.meshgrid(grid.x, grid.y, grid.z, indexing='ij')
-    if ppar['crd_sys'] == 'sph':
-        rr = mesh[0]
-        tt = mesh[1]
-        pp = mesh[2]
-        xx = rr * np.sin(tt) * np.sin(pp)
-        yy = rr * np.sin(tt) * np.cos(pp)
-        zz = rr * np.cos(tt)
-        cyrr = np.sqrt(xx**2. + yy**2)
-    elif ppar['crd_sys'] == 'car':
-        xx = mesh[0]
-        yy = mesh[1]
-        zz = mesh[2]
-        rr = np.sqrt(xx**2 + yy**2 + zz**2)
-        cyrr = np.sqrt(xx**2. + yy**2.)
-    else:
-        raise ValueError('crd_sys not specified in ppar')
-
-    rhogas = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64)
-
-    if ppar['crd_sys'] == 'sph':
-        if ppar['Rcav'] > 0:
-            cavpar = [ppar['Rcav'], ppar['Hcav'], ppar['qcav'], ppar['Hoff'], ppar['delHcav']]
-        else:
-            cavpar = None
-
-        if ppar['densmode'] == 0: # Ulrich model
-            r2d = rr[:,:,0]
-            t2d = tt[:,:,0]
-            
-            envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rct'], ppar['rho0'])
-            for ip in range(grid.nz):
-                rhogas[:,:,ip] = envdens2d
-
-        elif ppar['densmode'] == 1: # oblate model
-            rhogas = DiskEqs.eqOblateDens(cyrr, zz, ppar['rho0'], ppar['Rct'], ppar['eta'], ppar['envq'])
-        else:
-            raise ValueError('densmode not accepted')
-
-    # cavity
-    fac = DiskEqs.eqCavity(cyrr, zz, ppar)
-
-    rhogas = rhogas * fac
-
-    reg = rhogas < ppar['cutgdens']
-    rhogas[reg] = ppar['cutgdens']
+    rhogas = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64) + 1e-20
 
     return rhogas
 
@@ -278,17 +209,22 @@ def getDustDensity(grid=None, ppar=None):
     -------
     Returns the dust volume density in g/cm^3
     """
-    # read dust grain information
+    if ppar['crd_sys'] != 'ppl':
+        raise ValueError('crd_sys must be "ppl" for this model')
+
+    cutddens = 1e-30
     op = dustopac.radmc3dDustOpac()
     dinfo = op.readDustInfo()
     ngs = len(dinfo['gsize'])
-    dweights = dinfo['dweights']
 
-    rhogas = getGasDensity(grid=grid, ppar=ppar)
-    rhodust = np.zeros([grid.nx, grid.ny, grid.nz, ngs], dtype=np.float64) 
-
+    rhodust = np.zeros([grid.nx, grid.ny, grid.nz, ngs], dtype=np.float64)
     for ig in range(ngs):
-        rhodust[:, :, :, ig] = rhogas * ppar['g2d']
+        for iz in range(grid.nz):
+            if (grid.z[iz] <= ppar['dztop'][ig]) and (grid.z[iz] >= ppar['dzbot'][ig]):
+                rhodust[:,:,iz,ig] = ppar['rho0'][ig]
+            else:
+                rhodust[:,:,iz,ig] = cutddens
+
     return rhodust
 
 

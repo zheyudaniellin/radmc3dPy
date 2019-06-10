@@ -89,8 +89,10 @@ class dustspec(object):
 
         # silicates from Draine (from Dullemond Radmc3d)
         if 'Sil_Draine' in specs:
-            self.lnkfiles.append('/home/zdl3gk/coding/fortran/radmc3d_code/radmc3d-0.41/opac/dust_continuum/astrosil_draine03/astrosilicate_draine03.lnk')
-            self.optconst.append('astrosilicate_draine03')
-            self.graintype.append('silicate')
-            self.swgt.append(3.3)
-            self.mabun.append(2.64)
+            self.fnSpec('/home/zdl3gk/coding/fortran/radmc3d_code/radmc3d-0.41/opac/dust_continuum/astrosil_draine03/astrosilicate_draine03.lnk', 
+                'astrosilicate_draine03',
+                'silicate', 
+                3.3, 
+                2.64
+                )
+

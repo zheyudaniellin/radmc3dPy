@@ -49,7 +49,7 @@ from . molecule import *
 from . import crd_trans
 
 def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, ispec=None, vturb=False, alvec=False, qvis=False, grid=None,
-             binary=True, old=False, octree=False):
+             fdir=None, binary=True, old=False, octree=False):
     """Reads the physical variables of the model (e.g. density, velocity, temperature).
 
     Parameters
@@ -84,6 +84,9 @@ def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, isp
             is passed to the function it will not be read again from file. This can be useful for octree
             models to save time. 
 
+    fdir  : string, optional
+            directory
+
     old   : bool, optional
             If set to True the file format of the previous, 2D version of radmc will be used
 
@@ -108,12 +111,12 @@ def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, isp
             res.grid.readSpatialGrid()
         else:
             res.grid = radmc3dGrid()
-            res.grid.readSpatialGrid(old=old)
+            res.grid.readSpatialGrid(fdir=fdir, old=old)
 
     if ddens:
-        res.readDustDens(binary=binary, old=old, octree=octree)
+        res.readDustDens(binary=binary, fdir=fdir, old=old, octree=octree)
     if dtemp:
-        res.readDustTemp(binary=binary, old=old, octree=octree)
+        res.readDustTemp(binary=binary, fdir=fdir, old=old, octree=octree)
     if gvel:
         res.readGasVel(binary=binary, octree=octree)
     if gtemp:
@@ -121,9 +124,9 @@ def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, isp
     if vturb:
         res.readVTurb(binary=binary, octree=octree)
     if alvec:
-        res.readDustAlign(binary=binary, octree=octree)
+        res.readDustAlign(binary=binary, fdir=fdir, octree=octree)
     if qvis:
-        res.readViscousHeating(binary=binary, octree=octree)
+        res.readViscousHeating(binary=binary, fdir=fdir, octree=octree)
     if gdens:
         if not ispec:
             raise ValueError('Unknown ispec.\n'

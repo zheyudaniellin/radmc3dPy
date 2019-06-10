@@ -90,3 +90,4 @@ hour = 3.6000e3    # Hour [s]
 day = 8.6400e4    # Day  [s]
 
 rad = 0.017453292519943295
+jy = 1e-23         # Jansky
