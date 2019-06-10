@@ -112,6 +112,9 @@ class radmc3dDustOpac(object):
     ksca_from_z11 : list
                 Each element is a numpy ndarray containing the ksca calculated from z11. This should be close to ksca.
                 Calculated like computeDustOpacMie
+    phaseg_fromm_z11 : list
+                Each element is numpy ndarray containing the phaseg calculated from z11. This should be close to phaseg.
+                phaseg(lambda) = integ(z11(mu, lambda) mu dmu)
 
     kpara   : list
               Each element is a numpy ndarray containing the para (vertical) factor for opacity of oblate grains
@@ -147,6 +150,7 @@ class radmc3dDustOpac(object):
         self.scatang = []
         self.nang = []
         self.ksca_from_z11 = []
+        self.phaseg_from_z11 = []
         self.kpara = [] #dust alignment factor: vertical
         self.korth = [] #horizontal
         self.alignang = [] 
@@ -319,7 +323,7 @@ class radmc3dDustOpac(object):
         # Find the file name extensions in the master opacity file if idust is specified instead of ext
         if idust:
             # Read the master dust opacity file to get the dust indices and dustkappa file name extensions
-            mopac = self.readMasterOpac()
+            mopac = self.readMasterOpac(fdir=fdir)
 
             ext = []
             for ispec in idust:
@@ -388,18 +392,14 @@ class radmc3dDustOpac(object):
                 self.z34.append(data[:, :, 4])
                 self.z44.append(data[:, :, 5])
 
-                # calculate the ksca from scatmat
+                # calculate the ksca and phaseg from scatmat
                 if anggrid is not None:
-                    z11dum = data[:,:,0]
-                    mu = np.cos(anggrid * np.pi / 180.)
-                    dmu = np.abs(mu[1:nang] - mu[0:nang-1])
-                    kscat_from_z11 = np.zeros([hdr[1]])
-                    for ii in range(hdr[1]):
-                        zav = 0.5 * (z11dum[ii, 1:nang] + z11dum[ii,0:nang-1])
-                        dum = 0.5 * zav * dmu
-                        kscat_from_z11[ii] = dum.sum() * 4 * np.pi
-                self.ksca_from_z11.append(kscat_from_z11)
+                    z11dum = np.squeeze(data[:,:,0])
+                    kkfromz11 = getKscafromZ11(anggrid, z11dum)
+                    self.ksca_from_z11.append(kkfromz11)
 
+                    ggfromz11 = getPhasegfromZ11(anggrid, z11dum)
+                    self.phaseg_from_z11.append(ggfromz11)
             else:
                 if not old:
                     fname = 'dustkappa_' + ext[i] + '.inp'
@@ -531,7 +531,7 @@ class radmc3dDustOpac(object):
     def makeOpac(self, ppar=None, wav=None, old=False, code='python',
                  theta=None, logawidth=None, wfact=3.0, na=20, chopforward=0., errtol=0.01,
                  verbose=False, extrapolate=False, fdir=None,
-                 ksca0=None, albedo0=None):
+                 ksca0=None, albedo0=None, z11ksca=False, z11phaseg=False):
         """Createst the dust opacities using a Mie code distributed with RADMC-3D.
 
         Parameters
@@ -624,6 +624,14 @@ class radmc3dDustOpac(object):
                      The extinction opacity is kept the same, but alter kabs and ksca. 
                      Float for all grain species, or list to be species dependent. 
                      This is done after ksca0 argument. 
+
+        z11ksca    : boolean, default False
+                     if scattering matrix is calculated, and this is set to True,
+                     then calculate ksca from z11 and use this as ksca
+
+        z11phaseg  : boolean, default False
+                     if scattering matrix is calculated, and this is set to True, 
+                     then calculate phaseg from z11 and use this as phaseg
         """
 
         #
@@ -754,6 +762,19 @@ class radmc3dDustOpac(object):
                                                  logawidth=logawidth, wfact=wfact, na=na, chopforward=chopforward,
                                                  errtol=errtol, verbose=verbose, extrapolate=extrapolate, return_type=1)
 
+                        # however, if chopforward > 0, there was already a renormalization
+                        # ksca from z11
+                        if z11ksca:
+                            kkfromz11 = getKscafromZ11(theta, o.z11[0])
+                            o.ksca[0] = kkfromz11
+                            o.ksca_from_z11[0] = kkfromz11
+
+                        # phaseg from z11
+                        if z11phaseg:
+                            ggfromz11 = getPhasegfromZ11(theta, o.z11[0])
+                            o.phase_g[0] = ggfromz11
+                            #o.phaseg_from_z11[0] = ggfromz11
+
                         # ksca0 setting
                         if type(ksca0) is float:
                             o.forceKsca(ksca0)
@@ -803,7 +824,7 @@ class radmc3dDustOpac(object):
 		    msg = 'gsdist_powex does not exist in ppar'
 		    raise ValueError(msg)
 
-            if 'mixabun' in ppar and mixgsize == 0:
+            if ('mixabun' in ppar) and (mixgsize == 0):
                 ext = []
                 matdensinfo = []
                 gsizeinfo = []
@@ -831,7 +852,7 @@ class radmc3dDustOpac(object):
                     gsizeinfo.append(gsize[igs])
                     dweightsinfo.append(dweights[igs])
                     
-            elif 'mixabun' in ppar and mixgsize ==1:
+            elif ('mixabun' in ppar) and (mixgsize ==1):
 		# mix sizes first, then mix abundance
                 for idust in range(len(ppar['lnk_fname'])):
                     swgt = ppar['gdens'][idust]
@@ -850,6 +871,7 @@ class radmc3dDustOpac(object):
                                 for igs in range(ppar['ngs'])]]
                     self.mixOpac(mixnames=mixnames, mixspecs=mixspecs, mixabun=[dweights], scatmat=mixscatmat, fdir=fdir)
                 #endfor idust
+
                 mixnames = [kaphead+'_avg.inp']	#since we summed all the species and sizes
                 mixspecs = [[kaphead+'_idust_'+str(idust + 1) + '.inp' 
 			    for idust in range(len(ppar['lnk_fname']))]]
@@ -868,7 +890,7 @@ class radmc3dDustOpac(object):
             elif 'mixabun' not in ppar and mixgsize == 0:
 		# simply not do anything
 		msg = 'not doing anything'
-            elif 'mixabun' not in ppar and mixgsize == 1:
+            elif ('mixabun' not in ppar) and (mixgsize == 1):
                 msg = 'cannot use the case for mixabun=0 and mixgsize=1'
                 raise ValueError(msg)
             else:
@@ -987,7 +1009,19 @@ class radmc3dDustOpac(object):
                                              logawidth=logawidth, wfact=wfact, na=na, chopforward=chopforward,
                                              errtol=errtol, verbose=verbose, extrapolate=extrapolate, return_type=1)
 
-                    # brute force settings
+                    # ---- brute force settings ----
+                    # however, if chopforward > 0, there was already a renormalization
+                    # ksca from z11
+                    if z11ksca:
+                        kkfromz11 = getKscafromZ11(theta, o.z11[0])
+                        o.ksca[0] = kkfromz11
+                        o.ksca_from_z11[0] = kkfromz11
+
+                    # phaseg from z11
+                    if z11phaseg:
+                        ggfromz11 = getPhasegfromZ11(theta, o.z11[0])
+                        o.phase_g[0] = ggfromz11
+
                     # ksca0 setting
                     if type(ksca0) is float:
                         o.forceKsca(ksca0)
@@ -1353,7 +1387,7 @@ class radmc3dDustOpac(object):
                 mixabun = ppar['mixabun']
         if scatmat is False: 
             for i in range(len(mixnames)):
-                i#
+                #
                 # Read the dust opacities to be mixed for composite dust species #1
                 #
                 ocabs = []
@@ -1462,7 +1496,7 @@ class radmc3dDustOpac(object):
   
                         ocabs = ocabs + np.array(dum) * mixabun[i][j]
 
-                        if oform == 2:
+                        if (oform == 2) or (oform == 3):
                             # Do the inter-/extrapolation of for the scattering coefficients
                             dum = np.zeros(nwav0, dtype=float)
                             dum[ii] = 10. ** np.interp(np.log10(owav[ii]), np.log10(dw), np.log10(dcsca))
@@ -1479,7 +1513,9 @@ class radmc3dDustOpac(object):
                             # Do the inter-/extrapolation of for the scattering phase function
                             dum = np.zeros(nwav0, dtype=float)
                             #dum[ii] = 10. ** np.interp(np.log10(owav[ii]), np.log10(dw), log10(gsym)) #sometimes gsym may be negative
-                            dum[ii] = np.interp(np.log10(owav[ii]), np.log10(dw), gsym)
+                            #dum[ii] = np.interp(np.log10(owav[ii]), np.log10(dw), gsym) # don't use np
+                            gfunc = interp1d(np.log10(dw), gsym, kind='cubic')
+                            dum[ii] = gfunc(np.log10(owav[ii]))
 
                             # der = np.log10(gsym[1] / gsym[0]) / np.log10(dw[1] / dw[0])
                             dum[il] = 10. ** (np.log10(gsym[0]) + np.log10(dw[0] / owav[il]))
@@ -1521,31 +1557,19 @@ class radmc3dDustOpac(object):
                 dumop.readOpac(ext=extspecs, scatmat=[True for j in range(len(mixspecs[i]))], old=False)
 
                 outop = radmc3dDustOpac() 	#this is for the summed data and for writing output
-                #just assume that it is all in the same wavlength... so troublesome to intra/extrapolate to wavelength
+                #just assume that it is all in the same wavlength... so troublesome to inter/extrapolate to wavelength
                 #and assume it is all in the same angular grid too...
 
                 outop.wav.append(dumop.wav[0])
                 outop.freq.append(dumop.freq[0])
                 outop.nwav.append(dumop.nwav[0])
                 outop.nfreq.append(dumop.nfreq[0])
-                
+
                 # kabs
                 dumsum = np.zeros([dumop.nwav[0]], dtype=np.float64)
                 for j in range(len(dumop.idust)):
                    dumsum = dumsum + dumop.kabs[j] * mixabun[i][j]
                 outop.kabs.append(dumsum)
-
-                # ksca
-                dumsum = np.zeros([dumop.nwav[0]], dtype=np.float64)
-                for j in range(len(dumop.idust)):
-                   dumsum = dumsum + dumop.ksca[j] * mixabun[i][j]
-                outop.ksca.append(dumsum)
-
-                # phase_g
-                dumsum = np.zeros([dumop.nwav[0]], dtype=np.float64)
-                for j in range(len(dumop.idust)):
-                   dumsum = dumsum + dumop.phase_g[j] * mixabun[i][j]
-                outop.phase_g.append(dumsum)
 
                 # ext
                 outop.ext.append(extnames[i])
@@ -1601,11 +1625,30 @@ class radmc3dDustOpac(object):
                 # nang
                 outop.nang.append(dumop.nang[0])
 
-                # ksca_from_z11
-                dumsum = dumop.ksca_from_z11[0] * mixabun[i][0]
-                for j in range(len(dumop.idust)-1):
-                    dumsum = dumsum + dumop.ksca_from_z11[j+1] * mixabun[i][j+1]
-                outop.ksca_from_z11.append(dumsum)
+                # calculate ksca_from_z11
+                kkfromz11 = getKscafromZ11(outop.scatang[i], outop.z11[i])
+#                kkfromz11 = dumop.ksca_from_z11[0] * mixabun[i][0]
+#                for j in range(len(dumop.idust)-1):
+#                    kkfromz11 = kkfromz11 + dumop.ksca_from_z11[j+1] * mixabun[i][j+1]
+                outop.ksca_from_z11.append(kkfromz11)
+
+                # calculate phaseg_from_z11
+                ggfromz11 = getPhasegfromZ11(outop.scatang[i], outop.z11[i])
+                outop.phaseg_from_z11.append(ggfromz11)
+
+                # ksca
+                dumsum = np.zeros([dumop.nwav[0]], dtype=np.float64)
+                for j in range(len(dumop.idust)):
+                   dumsum = dumsum + dumop.ksca[j] * mixabun[i][j]
+#                outop.ksca.append(dumsum)
+                outop.ksca.append(kkfromz11)	# directly normalize based on z11
+
+                # phase_g
+                dumsum = np.zeros([dumop.nwav[0]], dtype=np.float64)
+                for j in range(len(dumop.idust)):
+                   dumsum = dumsum + dumop.phase_g[j] * mixabun[i][j]
+#                outop.phase_g.append(dumsum)
+                outop.phase_g.append(ggfromz11)
 
                 # write to file
                 outop.writeOpac(ext=extnames[i], idust=0, scatmat=True, fdir=fdir)
@@ -1690,13 +1733,15 @@ class radmc3dDustOpac(object):
         gsize   : list
                   grain size in micron
         """
+        if fname is None:
+            fname = 'dustinfo.zyl'
+
         if fdir is not None:
             if fdir[-1] is '/':
                 fname = fdir + 'dustinfo.zyl'
             else:
                 fname = fdir + '/dustinfo.zyl'
-        if fname is None:
-            fname = 'dustinfo.zyl'
+
         if ext is None:
             raise ValueError('ext must be given when writing to dustinfo.zyl')
         if matdens is None:
@@ -1708,7 +1753,7 @@ class radmc3dDustOpac(object):
         if ndust != len(gsize):
             raise ValueError('matdens and gsize must be in the same length')
 
-        with open('dustinfo.zyl', 'w') as wfile:
+        with open(fname, 'w') as wfile:
             # file format
             wfile.write('%-15s %s\n' % ('2', 'Format number of this file'))
 
@@ -2474,15 +2519,18 @@ def computeDustOpacMie(fname='', matdens=None, agraincm=None, lamcm=None,
             zscat[i, iang, 3] = zscat[i, iiang, 3]
             zscat[i, iang, 4] = zscat[i, iiang, 4]
             zscat[i, iang, 5] = zscat[i, iiang, 5]
+
             mu = np.cos(angles * np.pi / 180.)
             dmu = np.abs(mu[1:nang] - mu[0:nang-1])
             zav = 0.5 * (zscat[i, 1:nang, 0] + zscat[i, 0:nang-1, 0])
             dum = 0.5 * zav * dmu
             kscat[i] = dum.sum() * 4 * np.pi
+#            kscat[i] = getKscafromZ11(angles, np.squeeze(zscat[i,:,0]))
 
             zav = 0.5 * (zscat[i, 1:nang, 0] * mu[1:] + zscat[i, 0:nang-1, 0] * mu[:-1])
             dum = 0.5 * zav * dmu
             gscat[i] = dum.sum() * 4 * np.pi / kscat[i]
+#            gscat[i] = getPhasegfromZ11(angles, np.squeeze(zscat[i,:,0]))
 
     #
     # If error found, then warn (Then shouldn't it be called a warning? If it's a true error
@@ -2540,3 +2588,202 @@ def computeDustOpacMie(fname='', matdens=None, agraincm=None, lamcm=None,
         opac.scatmat = [True]
         opac.ksca_from_z11 = [kscat_from_z11]
         return opac
+
+def getKscafromZ11(theta, z11):
+    """ calculates ksca from z11
+    theta : 1d ndarray
+            in degrees, increase monotomically
+    z11 : 2d ndarray
+            wavelength by angle
+    """
+    nwav, ntheta = z11.shape
+    if ntheta != len(theta):
+        raise ValueError('inconsistent angle grid with z11')
+
+    mu = np.cos(theta * np.pi / 180.)
+    dmu = np.abs(mu[1:ntheta] - mu[0:ntheta-1])
+    ksca_from_z11 = np.zeros([nwav], dtype=np.float64)
+    for iwav in range(nwav):
+        zav = 0.5 * (z11[iwav, 1:ntheta] + z11[iwav, 0:ntheta-1])
+        dum = zav * dmu
+        ksca_from_z11[iwav] = dum.sum() * 2. * np.pi
+    return ksca_from_z11
+
+def getPhasegfromZ11(theta, z11):
+    """ calculates phaseg from z11
+    same arguments as getKscafromZ11
+    look up polarization_total_scattering_opacity subroutine in polarization module in radmc3d
+    """
+    ksca_from_z11 = getKscafromZ11(theta, z11)
+    nwav, ntheta = z11.shape
+
+    mu = np.cos(theta * np.pi / 180.)
+    dmu = np.abs(mu[1:ntheta] - mu[0:ntheta-1])
+    mustg = 0.5 * (mu[1:ntheta] + mu[0:ntheta-1])
+    phaseg_from_z11 = np.zeros([nwav], dtype=np.float64)
+    for iwav in range(nwav):
+        zav = 0.5 * (z11[iwav, 1:ntheta] + z11[iwav, 0:ntheta-1])
+        dum = zav * mustg * dmu
+        phaseg_from_z11[iwav] = dum.sum() * 2. * np.pi / ksca_from_z11[iwav]
+
+    return phaseg_from_z11
+
+def combineDustOpac(opacs, mopacs, dinfo, dweights, ext=None, 
+        scatmodemax=None, outdir=None):
+    """
+    combines numerous dustopac objects into a single dustopac object and writes the output
+
+    Parameters
+    ----------
+    opacs  	: list
+             	list of dustopac objects
+
+    mopacs 	: list 
+		list of master opac
+
+    dinfo 	: list 
+            	list of dinfo
+
+    dweights 	: array
+               	weighting for each dust species
+
+    ext    	: list
+             	list of extension names after combining
+
+    scatmodemax : float
+		the desired output scatmodemax
+
+    Returns
+    -------
+    op
+
+    """
+    # number of dustopac objects
+    nopacs = len(opacs)
+
+    if nopacs != len(mopacs):
+        raise ValueError('number of dustopac objects not equal to number of mopacs')
+    if nopacs != len(dinfo):
+        raise ValueError('number of dustopac objects not equal to number of dinfo')
+
+    # number of species in total
+    nspec = 0
+    for ii in range(nopacs):
+        nspec = nspec + len(opacs[ii].wav)
+
+    if ext is None:
+        ext = range(nspec)
+
+    if nspec != len(ext):
+        raise ValueError('number of dustopac objects not equal to number of extension names')
+
+    # determine scatmodemax
+    # default scatmodemax
+    if scatmodemax is None:
+        scatmodemax = 5
+
+    # scatmodemax=5 only if all input dustopacs have scatmat
+    if scatmodemax >=2:
+        for ii in range(nopacs):
+            for jj in range(len(opacs[ii].wav)):
+                if mopacs[ii]['scatmat'] is False:
+                    scatmodemax=2
+
+    # determine scatmat
+    if scatmodemax <=2:
+        scatmat = [False for ii in range(nspec)]
+    elif scatmodemax == 5:
+        scatmat = []
+        for ii in range(nopacs):
+            for jj in range(len(opacs[ii].wav)):
+                scatmat.append(mopacs[ii]['scatmat'][jj])
+    else:
+        raise ValueError('not sure about modes 3 and 4')
+
+    # set up therm
+    therm = [True for ii in range(nspec)]
+
+    # dweights
+    if type(dweights) is list:
+        dweights = np.array(dweights)
+    if dweights.sum() != 1:
+        dweights = dweights / dweights.sum()
+
+    # matdens and gsize
+    matdens = []
+    gsize = []
+    for ii in range(nopacs):
+        for jj in range(len(opacs[ii].wav)):
+            matdens.append(dinfo[ii]['matdens'][jj])
+            gsize.append(dinfo[ii]['gsize'][jj])
+
+    # prepare the output dustopac
+    op =radmc3dDustOpac()
+
+    #  ---- write the master opac ----
+    op.writeMasterOpac(ext=ext, therm=therm, scattering_mode_max=scatmodemax, 
+        old=False, alignment_mode=0, fdir=outdir)
+
+    # ---- write dust info ----
+    op.writeDustInfo(ext=ext, matdens=matdens, gsize=gsize, dweights=dweights, 
+        fdir=outdir)
+
+    # ---- write op ----
+    ispec = 0
+    for ii in range(nopacs):
+        for jj in range(len(opacs[ii].wav)):
+            # extension name
+            op.ext.append(ext[ispec])
+
+            # wavelength axis
+            wavii = opacs[ii].wav[jj]
+            nwav = len(wavii)
+            freqii = nc.cc * 1e4 / wavii
+            nfreq = nwav
+
+            op.wav.append(wavii)
+            op.nwav.append(nwav)
+            op.freq.append(freqii)
+            op.nfreq.append(nfreq)
+
+            # opacities
+            kabsii = opacs[ii].kabs[jj]
+            op.kabs.append(kabsii)
+
+            if scatmodemax >= 1:
+                kscaii = opacs[ii].ksca[jj]
+                op.ksca.append(kscaii)
+
+            if scatmodemax >= 2:
+                phase_gii = opacs[ii].phase_g[jj]
+                op.phase_g.append(phase_gii)
+
+            if scatmodemax == 5:
+                # angle
+                angii = opacs[ii].scatang[jj]
+                op.scatang.append(angii)
+                op.nang.append(len(angii))
+
+                # scattering matrix
+                op.z11.append(opacs[ii].z11[jj])
+                op.z12.append(opacs[ii].z12[jj])
+                op.z22.append(opacs[ii].z22[jj])
+                op.z33.append(opacs[ii].z33[jj])
+                op.z34.append(opacs[ii].z34[jj])
+                op.z44.append(opacs[ii].z44[jj])
+
+                # ksca_from_z11
+                kk = getKscafromZ11(op.scatang[ispec], op.z11[ispec])
+                op.ksca_from_z11.append(kk)
+
+                gg = getPhasegfromZ11(op.scatang[ispec], op.z11[ispec])
+                op.phaseg_from_z11.append(gg)
+
+            ispec = ispec + 1
+
+    # write op
+    for ispec in range(nspec):
+        op.writeOpac(ext=ext[ispec],idust=ispec,scatmat=scatmat[ispec], fdir=outdir)
+
+    return op
+            

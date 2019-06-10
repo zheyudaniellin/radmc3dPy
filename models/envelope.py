@@ -28,6 +28,7 @@ import traceback
 
 from .. import dustopac
 from .. import natconst
+from . import DiskEqs
 import pdb
 
 try:
@@ -73,13 +74,20 @@ def getDefaultParams():
         ['mstar', '[2.0*ms]', 'Mass of the star(s)'],
         ['rstar', '[2.0*rs]', 'Radius of star'],
         # density 
+        ['densmode', '0', 'different density modes. 0 for Ulrich. 1 for oblate sphere'],
         ['g2d', '0.01', ' Dust to Gas ratio'],
-        ['menv', '0.05*ms', 'mass of envelope'],
-        ['Rct', '', 'radius for envelope'], 
+        ['rho0', '1e-16', 'characteristic density'],
+        ['Rct', '30*au', 'radius for envelope. corotation radius for mode 1.'], 
+        ['envq', '-2', 'envelope radial exponent for mode 2'], 
+        ['eta', '0.3', 'height to radius of oblate sphere for mode 2'], 
         ['cutgdens', '1e-30', 'cut for gas density'],
         # cavity
-        ['cav_a', '', 'cavity, y=a x^2 +b'],
-        ['cav_b', '', 'cavity'], 
+        ['cavmode', '0', 'cavity mode. 0 to turn off. 1 for power-law'], 
+        ['Rcav', '50*au', 'radius for cavity. set to less than 0 to not include cavity'],
+        ['Hcav', '50*au', 'height for cavity'],
+        ['qcav', '2.0', 'power index for cavity'],
+        ['Hoff', '0', 'height offset'],
+        ['delHcav', '5*au', 'length scale in height for taper'],
         # temperature related
         ['Rt','20.*au', ' characteristic radius for temperature, height'],
         ['T0', '105.', 'temperature at Rt'], #with dM=5e-6, T=30 at 20au
@@ -188,14 +196,6 @@ def getGasAbundance(grid=None, ppar=None, ispec=''):
    
     return gasabun
 
-def chooseSol(res, cosi):
-    """chooses the suitable solution
-    """
-    nsol = 3
-    flag = np.ones(nsol)
-    for ii in range(nsol):
-        if 
-        
 
 def getGasDensity(grid=None, ppar=None):
     """Calculates the total gas density distribution 
@@ -234,21 +234,31 @@ def getGasDensity(grid=None, ppar=None):
     rhogas = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64)
 
     if ppar['crd_sys'] == 'sph':
-        for ir in range(grid.nx):
-            for it in range(grid.ny):
-                rii = grid.x[ir]
-                tii = grid.y[it]
-                cosii = np.cos(tii)
-                sinii = np.sin(tii)
-                xii = rii*sinii
-                yii = rii*cosii
-                parabii = ppar['cav_a'] * xii**2 + ppar['cav_b'] 
-                coeff = [-rii/ppar['Rct']*cosii, (rii/ppar['Rct']-1.), 0, 1]
-                res = np.roots(coeff)
-                if len(res) != 3:
-                    raise ValueError('poor solution')
-                resii = chooseSol(res, cosii)
-        
+        if ppar['Rcav'] > 0:
+            cavpar = [ppar['Rcav'], ppar['Hcav'], ppar['qcav'], ppar['Hoff'], ppar['delHcav']]
+        else:
+            cavpar = None
+
+        if ppar['densmode'] == 0: # Ulrich model
+            r2d = rr[:,:,0]
+            t2d = tt[:,:,0]
+            
+            envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rct'], ppar['rho0'])
+            for ip in range(grid.nz):
+                rhogas[:,:,ip] = envdens2d
+
+        elif ppar['densmode'] == 1: # oblate model
+            rhogas = DiskEqs.eqOblateDens(cyrr, zz, ppar['rho0'], ppar['Rct'], ppar['eta'], ppar['envq'])
+        else:
+            raise ValueError('densmode not accepted')
+
+    # cavity
+    fac = DiskEqs.eqCavity(cyrr, zz, ppar)
+
+    rhogas = rhogas * fac
+
+    reg = rhogas < ppar['cutgdens']
+    rhogas[reg] = ppar['cutgdens']
 
     return rhogas
 
@@ -268,10 +278,17 @@ def getDustDensity(grid=None, ppar=None):
     -------
     Returns the dust volume density in g/cm^3
     """
+    # read dust grain information
+    op = dustopac.radmc3dDustOpac()
+    dinfo = op.readDustInfo()
+    ngs = len(dinfo['gsize'])
+    dweights = dinfo['dweights']
 
     rhogas = getGasDensity(grid=grid, ppar=ppar)
-    rhodust = np.zeros([grid.nx, grid.ny, grid.nz, 1], dtype=np.float64) 
-    rhodust[:, :, :, 0] = rhogas * ppar['dusttogas']
+    rhodust = np.zeros([grid.nx, grid.ny, grid.nz, ngs], dtype=np.float64) 
+
+    for ig in range(ngs):
+        rhodust[:, :, :, ig] = rhogas * ppar['g2d']
     return rhodust
 
 

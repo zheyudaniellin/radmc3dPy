@@ -303,7 +303,7 @@ class radmc3dGrid(object):
         if not isinstance(nzi, list):
             nzi = [nzi]
 
-        if crd_sys == 'car':
+        if (crd_sys == 'car') or (crd_sys=='ppl'):
             #
             # First check whether the grid boundaries are specified
             #
@@ -380,7 +380,7 @@ class radmc3dGrid(object):
                 self.yi = np.append(self.yi, dum)
                 self.y = 0.5 * (self.yi[0:self.ny] + self.yi[1:self.ny + 1])
             else:
-                if self.act_dim[0] == 1:
+                if self.act_dim[1] == 1:
                     self.nyi = nyi[0]
                     self.yi = ybound[0] + (ybound[1] - ybound[0]) * (
                         np.arange(self.nyi, dtype=np.float64) / float(self.nyi - 1.))
@@ -395,7 +395,7 @@ class radmc3dGrid(object):
                     #
                     # Create the z-azis
                     #
-            if len(nzi) > 1:
+            if len(nzi) > 1:	# if there are portions
                 self.nzi = sum(nzi)
                 self.nz = self.nzi - 1
                 self.zi = zbound[0] + (zbound[1] - zbound[0]) * (
@@ -410,8 +410,8 @@ class radmc3dGrid(object):
                     np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart] - 1))
                 self.zi = np.append(self.zi, dum)
                 self.z = 0.5 * (self.zi[0:self.nz] + self.zi[1:self.nz + 1])
-            else:
-                if self.act_dim[0] == 1:
+            else: # if only single range
+                if self.act_dim[2] == 1:
                     self.nzi = nzi[0]
                     self.zi = zbound[0] + (zbound[1] - zbound[0]) * (
                         np.arange(self.nzi, dtype=np.float64) / float(self.nzi - 1.))
@@ -620,6 +620,13 @@ class radmc3dGrid(object):
                     self.nz = 1
                     self.nzi = 2
 
+        # special case: plane parallel
+        # turn off x and y after creating all the relevant axis
+        if self.crd_sys == 'ppl':
+            self.act_dim[0] = 0
+            self.act_dim[1] = 0
+
+
     def writeSpatialGrid(self, fname='', old=False, fdir=None):
         """Writes the wavelength grid to a file (e.g. amr_grid.inp).
 
@@ -654,6 +661,9 @@ class radmc3dGrid(object):
                 # Coordinate system (0-99 cartesian, 100-199 spherical, 200-299 cylindrical)
                 if self.crd_sys == 'car':
                     wfile.write('%d\n' % 0)
+                # Coordinate system (10 - plane-parallel)
+                if self.crd_sys == 'ppl':
+                    wfile.write('%d\n' % 10)
                 # Coordinate system (0-99 cartesian, 100-199 spherical, 200-299 cylindrical)
                 if self.crd_sys == 'sph':
                     wfile.write('%d\n' % 100)

@@ -16,7 +16,7 @@ execfile('panel4radmc.py')
 
 zylutils.set_image.makemcImage(inc=[86.],
     camwav=[433, 851, 1327., 2853., 9098.], 
-    sizeau=200., npix=300, 
+    sizeau=200., npix=300,  wavfname='camera_wavelength_micron.inp.image',
     dotausurf=False, dooptdepth=True)
 
 clock_stop = time.time()

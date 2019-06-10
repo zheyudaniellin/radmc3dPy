@@ -1,11 +1,8 @@
 """Disk with analytical multiple layers of dust
 the dust grain sizes go from small to large
+the first type of grain will have an envelope and disk 
 
-This template is an empty model, i.e. all model functions return zeros in the appropriate arrays and dimensions. 
-The purpose of this model is to illustrate the names and syntax of the model functions. Hence, this file can
-be a starting point for implementing new models in the library. 
-
-Can look at Cleeves' paper on IM Lup with dust and gas modeling
+the multiplying factor of gaps and rings are added
 
 A radmc3dPy model file can contain any / all of the functions below
 
@@ -111,11 +108,33 @@ def getDefaultParams():
         ['dRt', '[100.*au, 100*au]', 'radius for scale height'],
         ['dHt', '[12.*au, 3.*au]', 'Scale height'],
         ['dqheight', '[1.15, 1.15]', 'power index for scale height'],
-
+        # dust gap
+        ['dgap_r', '[50*au, 100*au]', 'radial location of gap'],
+        ['dgap_w', '[5*au, 5*au]', 'width of gap'], 
+        ['dgap_f', '[1, 1]', 'gap abundance at peak. 1 for no gap'], 
+        # dust ring
+        ['dring_r', '[50*au]', 'radial location of ring'], 
+        ['dring_w', '[5*au]', 'width of ring'],
+        ['dring_f', '[0]', 'ring fraction of surface density. 0 for no ring'], 
+        # envelope
+        ['envmode', '0', '0:Ulrich. 1: oblate sphere'], 
+        ['dMenv', '5e-6', 'envelope accretion rate onto disk [Msun/year]'],
+        ['rhoRc', '5e-16', 'Density at Rc. This is used if dMenv is < 0'],
+        ['Rc', '50*au', 'Radius where infall velocity equals rotation velocity'], 
+        ['envq_1', '-1.5', 'envelope radial exponent'], 
+        ['eta', '0.3', 'z/r for oblate sphere'], 
+        # cavity
+        ['cavmode', '0', '0 to turn off. 1 for power-law'], 
+        ['Rcav', '50*au', 'radius for cavity'], 
+        ['Hcav', '50*au', 'height for cavity'], 
+        ['qcav', '2.0', 'power index for cavity'], 
+        ['Hoff', '0', 'height offset'], 
+        ['delHcav', '5*au', 'length scale in height for taper'], 
         # temperature related
         ['cuttemp', '10', 'temperature cut'],
         ['alph', '0.01', 'viscosity parameter. set to -1 to use dM (not implemented yet).'],
         ['dM', '0.', 'constant accretion rate across disk. Uses this if alph is -1'],
+        ['T0', '50', 'temperature at Rt'], 
         # alignment
         ['altype', "'toroidal'", 'alignment type'], 
         ['B_R0', '[50*au, 50*au, 50*au]', ''],
@@ -165,7 +184,8 @@ def getGasTemperature(grid=None, ppar=None):
     else:
         raise ValueError('crd_sys not specified in ppar')
 
-    tgas = np.sqrt(0.5 * ppar['rstar'][0] / cyrr) * ppar['tstar'][0]
+#    tgas = np.sqrt(0.5 * ppar['rstar'][0] / cyrr) * ppar['tstar'][0]
+    tgas = ppar['T0'] * (cyrr / ppar['Rt'])**(-0.5)
     reg = tgas < ppar['cuttemp']
     tgas[reg] = ppar['cuttemp']
 
@@ -285,6 +305,17 @@ def fn_getrhoxyz(cyrr,zz, Ht, Rt, qheight, sigp, mdisk, Rsig):
     rho = sig_cyrr / np.sqrt(2.*np.pi) / hh * np.exp(-0.5*(zz/hh)**2.)
     return rho
 
+def fn_getgap(cyrr, gapr, gapw, gapf):
+    # f = exp(- a * exp(-0.5*(dr/w)**2))
+    # gapf = relative abundance at peak
+    gapa = -np.log(gapf)
+    fac = np.exp(-gapa * np.exp(-0.5*((cyrr - gapr)/gapw)**2))
+    return fac
+
+def fn_getring(cyrr, ringr, ringw, ringf):
+    fac = ringf * np.exp(-0.5 * ((cyrr - ringr) / ringw)**2)
+    return fac
+
 def getGasDensity(grid=None, ppar=None):
     """Calculates the total gas density distribution 
     
@@ -381,8 +412,55 @@ def getDustDensity(grid=None, ppar=None):
         else:
             raise ValueError('ppar does not have %s'%(parnames[ii]))
 
+    # calculate the gap depletion function. independent of grain size for now
+    ngaps = len(ppar['dgap_r'])
+    gapfac = cyrr*0 + 1.
+    for igap in range(ngaps):
+        gaprii = ppar['dgap_r'][igap]
+        gapwii = ppar['dgap_w'][igap]
+        gapfii = ppar['dgap_f'][igap]
+
+        facii = fn_getgap(cyrr, gaprii, gapwii, gapfii)
+        gapfac = gapfac * facii
+
+    # calculate the ring function 
+    nrings = len(ppar['dring_r'])
+    ringfac = cyrr* 0 
+    for iring in range(nrings):
+        ringrii = ppar['dring_r'][iring]
+        ringwii = ppar['dring_w'][iring]
+        ringfii = ppar['dring_f'][iring]
+        facii = fn_getring(cyrr, ringrii, ringwii, ringfii)
+        ringfac = ringfac + facii
+
+    # dealing with ring and gap fractions
+    # take the maximum between these two factors
+    fac = np.maximum(gapfac, ringfac)
+
+    # calculate the cavity
+    cavfac = DiskEqs.eqCavity(cyrr, zz, ppar)
+
+    # envelope component
+    rho_env3d = cyrr * 0
+    if ppar['envmode'] == 0:    # Ulrich model
+        r2d = rr[:,:,0]
+        t2d = tt[:,:,0]
+        if ppar['dMenv'] >= 0:
+            GMR3 = natconst.gg * ppar['mstar'][0] * ppar['Rc']**3
+            dMenv = ppar['dMenv'] * natconst.ms / natconst.year
+            rhoRc = dMenv / (8.*np.pi) / np.sqrt(GMR3)
+        else:
+            rhoRc = ppar['rhoRc']
+        envdens2d = DiskEqs.eqEnvelopeDens(r2d, t2d, ppar['Rc'], rhoRc)
+        for ip in range(grid.nz):
+            rho_env3d[:,:,ip] = envdens2d
+    elif ppar['envmode'] == 1:  # oblate model
+        rho_env3d = DiskEqs.eqOblateDens(cyrr, zz, ppar['rhoRc'], ppar['Rc'], ppar['eta'], ppar['envq_1'])
+
+
     # now iterate through the arguments and produce each layer of dust
     for ig in range(ngs):
+        # disk arguments
         hii = ppar['dHt'][ig]
         rtii = ppar['dRt'][ig]
         qhii = ppar['dqheight'][ig]
@@ -390,7 +468,15 @@ def getDustDensity(grid=None, ppar=None):
         mdiskii = ppar['mdisk'] * ppar['g2d'] * dweights[ig]
         rsigii = ppar['dRsig'][ig]
 
-        rho_ig = fn_getrhoxyz(cyrr, zz, hii, rtii, qhii, sigii, mdiskii, rsigii)
+        disk_ig = fn_getrhoxyz(cyrr, zz, hii, rtii, qhii, sigii, mdiskii,rsigii)
+
+        if ig == 0: #the first grain will have envelope
+            rho_ig = np.maximum(disk_ig, rho_env3d)
+        else: 
+            rho_ig = disk_ig
+
+        rho_ig = rho_ig * fac * cavfac
+
         reg = rho_ig < ppar['g2d'] * ppar['cutgdens']
         rho_ig[reg] = ppar['g2d'] * ppar['cutgdens']
         rhodust[:,:,:,ig] = rho_ig

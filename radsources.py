@@ -323,6 +323,7 @@ class radmc3dRadSources(object):
                 wfile.write('%d\n' % 2)
                 wfile.write('%d %d\n' % (self.nstar, self.grid.nwav))
 
+                # write radius, mass, position
                 if self.nstar > 1:
                     for istar in range(self.nstar):
                         wfile.write('%.9e %.9e %.9e %.9e %.9e\n' % (self.rstar[istar], self.mstar[istar],
@@ -333,6 +334,8 @@ class radmc3dRadSources(object):
                                                                 self.pstar[0], self.pstar[1], self.pstar[2]))
 
                 wfile.write('%s\n' % ' ')
+
+                # write wavelength
                 for ilam in range(self.grid.nwav):
                     wfile.write('%.9e\n' % self.grid.wav[ilam])
                 wfile.write('%s\n' % ' ')
@@ -362,7 +365,7 @@ class radmc3dRadSources(object):
                         else:
                             for ilam in range(self.grid.nwav):
                                 wfile.write('%.9e\n' % (self.fnustar[ilam, istar]))
-        else:
+        else: #old style input
             if freq is not None:
                 self.grid.wav = nc.cc / np.array(freq) * 1e4
                 self.grid.freq = np.array(freq)

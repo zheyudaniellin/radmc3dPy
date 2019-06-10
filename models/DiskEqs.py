@@ -203,7 +203,45 @@ def fncavprof(cyr, cavpar):
     # always positive
     return zcav
 
-def eqEnvelopeDens(rr, tt, Rrot, rho0, cavpar=None):
+def eqCavity(cyrr, zz, cavpar):
+    """
+    calculates density fraction when considering cavity
+    Parameters
+    ----------
+    cyrr, zz = cylindrical radius and z meshgrid
+    cavpar: dictionary
+        Rcav : radius for cavity. Rcav=-1 for no cavity
+        Hcav : height for cavity at Rcav
+        qcav : power index
+        Hoff : height offset
+        delHcav : length scale in height for taper
+        cavmode: 0 = turn off. 1 = power-law type cavity
+    """
+    cavmode = cavpar['cavmode']
+    Rcav = cavpar['Rcav']
+    Hcav = cavpar['Hcav']
+    qcav = cavpar['qcav']
+    Hoff = cavpar['Hoff']
+    delHcav = cavpar['delHcav']
+
+    fac = cyrr * 0 + 1.
+
+    if cavmode == 0:
+        return fac
+    elif cavmode == 1:
+        fac = cyrr * 0 + 1.
+        zcav = Hcav * (cyrr / Rcav)**qcav + Hoff
+        reg = zz > zcav
+        fac[reg] = np.exp(- ((zz[reg] - zcav[reg]) / delHcav)**2)
+
+        reg = zz < -zcav
+        fac[reg] = np.exp(- ((zz[reg] + zcav[reg]) / delHcav)**2) 
+    else:
+        raise ValueError('cavmode=%d not accepted'%cavmode)
+
+    return fac
+
+def eqEnvelopeDens(rr, tt, Rrot, rho0):
     """
     rr, tt = radius and theta meshgrid. [cm], [rad] in 2D
     Rrot = radius where infall velocity equals rotational velocity
@@ -266,21 +304,12 @@ def eqEnvelopeDens(rr, tt, Rrot, rho0, cavpar=None):
                             * (np.cos(tt[ir,it])/mu0 / 2.
                                + Rrot / rr[ir,it] * (mu0)**2
                               )**(-1.) ) 
-            # cavity
-            if cavpar is not None:
-                zcav = fncavprof(cyr, cavpar)
-                delH = cavpar[4]
-                if zii > zcav:
-                    fac = np.exp( - ((zii - zcav) / delH)**2)
-                elif zii < -zcav:
-                    fac = np.exp( - ((zii + zcav) / delH)**2)
-                else:
-                    fac = 1.
-                cavmask[ir,it] = fac
-            else:
-                fac = 1.
-                cavmask[ir,it] = fac
+            dens[ir, it] = densii
 
-            dens[ir, it] = fac * densii
+    return dens
 
-    return dens, cavmask
+def eqOblateDens(cyrr, zz, rho0, R0, eta, envq):
+    rrp = np.sqrt(cyrr**2 + zz**2 / eta**2)
+    dens = rho0 * (rrp / R0)**envq
+
+    return dens

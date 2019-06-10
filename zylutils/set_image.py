@@ -7,8 +7,8 @@ import os
 
 #-------------------- make image ------------------------
 def makemcImage(inc=[0., 45., 75., 90.], posang=None, 
-                camwav=[434., 870., 2600., 9098.4],
-                npix=300, sizeau=200., phi=0., 
+                camwav=[434., 870., 2600., 9098.4], wavfname=None, 
+                npix=300, sizeau=None, phi=0., 
                 dotausurf=False, dooptdepth=False):
     inc = np.array(inc, dtype=np.float64)
     ninc= len(inc)
@@ -57,6 +57,7 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
             image.makeImage(npix=npix, loadlambda=1, incl=inc[ii], phi=phi, 
                 sizeau=sizeau, stokes=True, secondorder=1,nostar=True, 
                 posang=posang, 
+                nphot_scat=1000,# hard set nphot_scat, any low value is enough
                 fname=fname,tracetau=True)
 
         if (dotausurf or dooptdepth):
@@ -68,12 +69,47 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
                 par.ppar['alignment_mode'] = 1
                 setup.writeRadmc3dInp(modpar=par)
 
+    # change the 'camera_wavelength_micron.inp' to wavfname
+    if wavfname is not None:
+        os.system('mv camera_wavelength_micron.inp '+wavfname)
+
     #-----------------------------
     clock_stop = time.time()
 
     print 'Making Image total elapsed time = '
     print clock_stop - clock_begin
     #-----------------------------
+
+def makemcSpectrum(inc=[0.], posang=None,
+                camwav=[0.1, 1., 10., 100., 1e3, 1e4],
+                npix=300, sizeau=None, phi=0., 
+                nostar=False, noscat=False, secondorder=0):
+    """ creates spectrum
+    """
+
+    inc = np.array(inc, dtype=np.float64)
+    ninc= len(inc)
+
+    image.writeCameraWavelength(camwav=camwav)
+
+    # write an inp.spectruminc 
+    dum = fntools.zylwritevec(inc, 'inp.spectruminc')
+
+    clock_begin = time.time()
+
+    for ii in range(ninc):
+        fname = 'myspectrum.i%d.out'%(inc[ii])
+
+        image.makeSpectrum(npix=npix, incl=inc[ii], sizeau=sizeau,
+              phi=phi, posang=posang, nostar=nostar, noscat=noscat, 
+              secondorder=secondorder,
+              loadlambda=True,
+              fname=fname)
+
+    clock_stop = time.time()
+    print 'Making spectrum total elapsed time = '
+    print clock_stop - clock_begin
+
 
 #--------------------------- line ------------------------
 #image.makeImage(npix=300, incl=45, phi=0, sizeau=300, stokes=True, widthkms=5., linenlam=20, imolspec=1, iline=2) 

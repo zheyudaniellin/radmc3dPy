@@ -92,6 +92,7 @@ def getDefaultParams():
         ['Rend', '[120*au, 120*au]', 'end of spiral'], 
         ['bspir', '[0.138, 0.138]', 'R=R0 exp(b theta)'],
         ['wspir', '[0.3, 0.3]', 'Width of spiral (in rad)'], 
+        ['pspir', '[0, pi]', 'initial phase for the spiral'], 
         # gaps
         ['Rgap', '[71*au]', 'Radius of gap'], 
         ['wgap', '[4*au]', 'FWHM of gap'], 
@@ -209,39 +210,17 @@ def getGasAbundance(grid=None, ppar=None, ispec=''):
         raise ValueError(' The abundance of "'+ispec+'" is not specified in the parameter file')
    
     return gasabun
-'''
-def getSpiral(cyrr, pp, R0, b0, w0):
-    """ get spiral density gaussians
-    R0, b0, w0 must have same elements
+
+def getSpiral(cyrr, raxis,ttaaxis,paxis, R0, b0, w0, phase0, Rend):
+    """ R0, b0, w0, Rend, phase0 all in list or numpy array
+        phase0 in radians
     """
     nx,ny,nz = cyrr.shape
     spir = np.zeros([nx,ny,nz], dtype=np.float64)
     narms = len(R0)
-    dphase = 2.*np.pi / narms
-    phase0 = np.arange(narms)*dphase
-
-    for ia in range(narms):
-        pii = np.log(cyrr / R0[ia]) / b0[ia] - phase0[ia]
-        pii = np.mod(pii, 2*np.pi)
-
-        wsig = w0[ia]
-        pset = 
-        delp = min(abs(
-
-        spir = spir + 1. / np.sqrt(2.*np.pi) / wsig * np.exp(-0.5*((pp - pii) / wsig)**2)
-
-        reg = cyrr < R0[ia]
-        spir[reg] = 0.
-
-    return spir
-'''
-
-def getSpiral(cyrr, raxis,ttaaxis,paxis, R0, b0, w0, Rend):
-    nx,ny,nz = cyrr.shape
-    spir = np.zeros([nx,ny,nz], dtype=np.float64)
-    narms = len(R0)
-    dphase = 2.*np.pi / narms
-    phase0 = np.arange(narms)*dphase
+    if phase0 is None:
+        dphase = 2.*np.pi / narms
+        phase0 = np.arange(narms)*dphase
 
     # let inner component be azimuthally smooth
     norm = 1. / narms
@@ -263,7 +242,7 @@ def getSpiral(cyrr, raxis,ttaaxis,paxis, R0, b0, w0, Rend):
                     pset = np.array([pii-2*np.pi, pii, pii+2.*np.pi], dtype=np.float64)
                     delp = min(abs(pset -phispiral))
 
-                    spirii[ix,:,iz] = np.exp(-0.5*(delp/wsig)**2)
+                    spirii[ix,:,iz] = max(np.exp(-0.5*(delp/wsig)**2), 0.5*norm)
             else:
                 spirii[ix,:,:] = norm
 
@@ -321,7 +300,7 @@ def getGasDensity(grid=None, ppar=None):
         xx.max(), ppar['sigp'], 1)
 
 #    armpart = getSpiral(cyrr, pp, ppar['Rspir'], ppar['bspir'], ppar['wspir'])
-    armpart = getSpiral(cyrr, grid.x, grid.y, grid.z, ppar['Rspir'], ppar['bspir'], ppar['wspir'], ppar['Rend']) 
+    armpart = getSpiral(cyrr, grid.x, grid.y, grid.z, ppar['Rspir'], ppar['bspir'], ppar['wspir'], ppar['pspir'], ppar['Rend']) 
 
     gappart = getGap(cyrr, ppar['Rgap'], ppar['wgap'])
 
@@ -428,6 +407,6 @@ def getDustAlignment(grid=None, ppar=None):
     else:
         altype = ppar['altype']
 
-    alvec = DiskEqs.eqDustAlignment(crd_sys, grid.x, grid.y, grid.z, altype)
+    alvec = DiskEqs.eqDustAlignment(crd_sys, grid.x, grid.y, grid.z, altype, ppar)
     return alvec
 

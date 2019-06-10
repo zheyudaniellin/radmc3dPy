@@ -599,7 +599,7 @@ class radmc3dData(object):
 
         return dmass
 
-    def readDustDens(self, fname='', binary=True, old=False, octree=False):
+    def readDustDens(self, fname='', fdir=None, binary=False, old=False, octree=False):
         """Reads the dust density.
 
         Parameters
@@ -634,9 +634,13 @@ class radmc3dData(object):
             if binary:
                 if fname == '':
                     fname = 'dust_density.binp'
+                if fdir is not None:
+                    fname = fdir + '/' + fname
             else:
                 if fname == '':
                     fname = 'dust_density.inp'
+                if fdir is not None:
+                    fname = fdir + '/' + fname
 
             print('Reading '+fname)
             self.rhodust = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=4)
@@ -657,7 +661,7 @@ class radmc3dData(object):
 
         return True
 
-    def readDustTemp(self, fname='', binary=True, octree=False, old=False):
+    def readDustTemp(self, fname='', fdir=None, binary=False, octree=False, old=False):
         """Reads the dust temperature.
 
         Parameters
@@ -687,9 +691,13 @@ class radmc3dData(object):
             if binary:
                 if fname == '':
                     fname = 'dust_temperature.bdat'
+                if fdir is not None:
+                    fname = fdir + '/' + fname
             else:
-                if fname == '':
+                if fname == '': 
                     fname = 'dust_temperature.dat'
+                if fdir is not None:
+                    fname = fdir + '/' + fname
 
             print('Reading '+fname)
 
@@ -715,7 +723,7 @@ class radmc3dData(object):
 
         return True
 
-    def readGasVel(self, fname='', binary=True, octree=False):
+    def readGasVel(self, fname='', fdir=None, binary=True, octree=False):
         """Reads the gas velocity.
 
         Parameters
@@ -792,6 +800,8 @@ class radmc3dData(object):
 
             if fname == '':
                 fname = 'gas_velocity.inp'
+            if fdir is not None:
+                fname = fdir + '/' + fname
 
             if os.path.isfile(fname):
 
@@ -832,7 +842,7 @@ class radmc3dData(object):
 
         return True
 
-    def readDustAlign(self, fname='', binary=True, octree=False):
+    def readDustAlign(self, fname='', fdir=None, binary=False, octree=False):
         """Reads the Dust Alignment.
 
         Parameters
@@ -909,6 +919,9 @@ class radmc3dData(object):
             if fname == '':
                 fname = 'grainalign_dir.inp'
 
+            if fdir is not None:
+                fname = fdir + '/' + fname
+
             if os.path.isfile(fname):
 
                 print('Reading ' + fname)
@@ -949,7 +962,7 @@ class radmc3dData(object):
         return True
 
 
-    def readVTurb(self, fname='', binary=True, octree=False):
+    def readVTurb(self, fname='', fdir=None, binary=True, octree=False):
         """Reads the turbulent velocity field.
 
         Parameters
@@ -977,9 +990,14 @@ class radmc3dData(object):
         if binary:
             if fname == '':
                 fname = 'microturbulence.binp'
+            if fdir is not None:
+                fname = fdir + '/' + fname
         else:
             if fname == '':
                 fname = 'microturbulence.inp'
+
+            if fdir is not None:
+                fname = fdir + '/' + fname
 
         self.vturb = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
         if octree:
@@ -987,7 +1005,7 @@ class radmc3dData(object):
 
         return True
 
-    def readGasDens(self, ispec='', binary=True, octree=False):
+    def readGasDens(self, ispec='', fdir=None, binary=True, octree=False):
         """Reads the gas density.
 
         Parameters
@@ -1012,8 +1030,12 @@ class radmc3dData(object):
 
         if binary:
             fname = 'numberdens_' + ispec + '.binp'
+
         else:
             fname = 'numberdens_' + ispec + '.inp'
+
+        if fdir is not None:
+            fname = fdir + '/' + fname
 
         print('Reading gas density (' + fname + ')')
         self.ndens_mol = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
@@ -1061,7 +1083,7 @@ class radmc3dData(object):
 
         return True
 
-    def readViscousHeating(self, fname='', binary=True, octree=False):
+    def readViscousHeating(self, fname='', fdir=None, binary=True, octree=False):
         """Reads the heatsource.inp
 
         Parameters
@@ -1089,9 +1111,13 @@ class radmc3dData(object):
         if binary:
             if fname == '':
                 fname = 'heatsource.binp'
+                if fdir is not None:
+                    fname= fdir + fname
         else:
             if fname == '':
                 fname = 'heatsource.inp'
+                if fdir is not None:
+                    fname= fdir + fname
 
         self.qvis = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
         if octree:
