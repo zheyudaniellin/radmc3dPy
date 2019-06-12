@@ -10,18 +10,28 @@ runname = 'run1/'
 if os.path.isdir(runname) is False: 
     os.system('mkdir '+runname)
 
-# move data
-os.system('mv dust_temperature.dat dust_density.inp my*.out '+runname)
-os.system('mv amr_grid.inp camera_wavelength_micron.inp '+runname)
-os.system('cp dustopac.inp dustinfo.zyl '+runname)
-os.system('cp dustkap_*.inp '+runname)
-os.system('mv grainalign_dir.inp '+runname)
-os.system('cp problem_params.inp radmc3d.inp stars.inp wavelength_micron.inp '+runname)
-os.system('mv inp.imageinc camera_wavelength_micron.inp.image '+runname)
+# files to be copied
+datacp = ['dustopac.inp', 'dustinfo.zyl', 'dustkap*.inp']
+# data to be moved
+datamv = ['dust_temperature.dat', 'dust_density.inp',
+          'my*.out', 'myimage*.fits',
+          'amr_grid.inp', 'camera_wavelength_micron.inp',
+          'grainalign_dir.inp', 'inp.imageinc',
+          'camera_wavlength_micron.inp.image', 'radmc3d.inp',
+          'stars.inp', 'wavelength_micron.inp', 'problem_params.inp'
+         ]
+dirmv = ['temp2d']
 
-# extra
-if os.path.isdir('temp2d'):
-    os.system('mv temp2d '+runname)
+for idata in datacp:
+    os.system('cp %s %s'%(idata, runname))
+for idata in datamv:
+    os.system('mv %s %s'%(idata, runname))
+for idata in dirmv:
+    if os.path.isdir(idata):
+        fname = runname+'/'+idata
+        if os.path.isdir(fname):
+            os.system('rm -rf '+fname)
+        os.system('mv %s %s'%(idata, runname))
 
 # start to do outputs
 zylutils.set_output.commence(runname,polunitlen=-2, dis=400.,polmax=5.,

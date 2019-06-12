@@ -1609,22 +1609,62 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
     crval2 = hdr['crval2']
 #    cunit2 = hdr['cunit2']
 
-    cdelt3 = hdr['cdelt3']
-    naxis3 = hdr['naxis3']
-    ctype3 = hdr['ctype3']
-    crpix3 = hdr['crpix3'] - 1
-    crval3 = hdr['crval3']
-#    cunit3 = hdr['cunit3']
+    if 'cdelt3' in hdr:
+        cdelt3 = hdr['cdelt3']
+        naxis3 = hdr['naxis3']
+        ctype3 = hdr['ctype3']
+        crpix3 = hdr['crpix3'] - 1
+        crval3 = hdr['crval3']
+#        cunit3 = hdr['cunit3']
+    else:
+        ctype3 = None
+        naxis3 = 1
 
-    cdelt4 = hdr['cdelt4']
-    naxis4 = hdr['naxis4']
-    ctype4 = hdr['ctype4']
-    crpix4 = hdr['crpix4'] - 1
-    crval4 = hdr['crval4']
-#    cunit4 = hdr['cunit4']
+    if 'cdelt4' in hdr:
+        cdelt4 = hdr['cdelt4']
+        naxis4 = hdr['naxis4']
+        ctype4 = hdr['ctype4']
+        crpix4 = hdr['crpix4'] - 1
+        crval4 = hdr['crval4']
+#        cunit4 = hdr['cunit4']
+    else:
+        ctype4 = None
+        naxis4 = 1
+
+    # find the stokes and wavelength info
+    nstokes = 1
+    nfreq = 1
+    crvalz = None
+    
+    if ctype3 is not None:
+        if 'stokes' in ctype3.lower():
+            nstokes = naxis3
+        if 'freq' in ctype3.lower():
+            nfreq = naxis3
+            cdeltz = cdelt3
+            crpixz = crpix3
+            crvalz = crval3
+
+    # find the wavelength info
+    if ctype4 is not None:
+        if 'stokes' in ctype4.lower():
+            nstokes = naxis4
+        if 'freq' in ctype4.lower():
+            nfreq = naxis4  
+            cdeltz = cdelt4
+            crpixz = crpix4
+            crvalz = crval4
+ 
+    if nstokes > 1:
+        isStokes = True
+    elif naxis3 == 1:
+        isStokes = False
+    else:
+        raise ValueError('naxis3 has some weird value: %d' % naxis3)
 
     # there seems to be a transpose difference
-    if len(fitsdat[:,0,0,0]) != naxis1:
+    ndim = fitsdat.shape
+    if ndim[0] != naxis1:
         fitsdat = fitsdat.T
 
     # check the beam info
@@ -1648,19 +1688,14 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
     else:
         isJypBeam = False
 
-    # check the stokes info
-    if naxis4 > 1:
-        isStokes = True
-    elif naxis4 == 1:
-        isStokes = False
-    else:
-        raise ValueError('naxis4 has some weird value: %d' % naxis4)
-
     x = (np.array(range(naxis1)) - crpix1) * cdelt1 - 0.0 #this is in arcsec
     x = x * dpc * nc.au 	#converted to cm
     y = (np.array(range(naxis2)) - crpix2) * cdelt2 - 0.0
     y = y * dpc * nc.au
-    z = (np.array(range(naxis3)) - crpix3) * cdelt3 - crval3
+    if crvalz is not None:
+        z = (np.array(range(nfreq)) - crpixz) * cdeltz + crvalz
+    else:
+        z = np.array([1])
 
     sizepix_x = abs(cdelt1 * dpc * nc.au)
     sizepix_y = abs(cdelt2 * dpc * nc.au)
@@ -1693,20 +1728,17 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
     res.y = y
     res.nx = naxis1
     res.ny = naxis2
-    res.nfreq = naxis3
-    res.nwav = naxis3
+    res.nfreq = nfreq
+    res.nwav = nfreq
     if wav is None:
-        if 'freq' in ctype3.lower():
-            res.freq = abs(z)
-            res.wav = nc.cc * 1e4 / res.freq
-        else:
-            raise ValueError('ctype3 other than freq is not implemented yet')
+        res.freq = abs(z)
+        res.wav = nc.cc * 1e4 / res.freq
     else:
-        if 'freq' in ctype3.lower():
-            res.freq = nc.cc * 1e4 / wav
-            res.wav = wav
-        else:
-            raise ValueError('ctype3 other than freq is not implemented yet')
+        if type(wav) == float or type(wav) == int:
+            wav = np.array([wav], dtype=np.float64)
+        
+        res.freq = nc.cc * 1e4 / np.array(wav)
+        res.wav = wav
     res.stokes = isStokes
 
     if (bmaj is not None) & (bmin is not None):
@@ -2018,6 +2050,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
 
         # Check whether or not we need to mask the image
 
+        # data as [ra, dec, stokes, wav]
         dum_image = copy.deepcopy(image)
         if dum_image.stokes:
             if stokes.strip().upper() == 'I':
@@ -2444,6 +2477,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
             implot.axes.add_patch(ells)
 #        plt.show()
 
+    # ------------------------------------------------------#
     elif isinstance(image, radmc3dCircimage):
 
         # Check whether or not we need to mask the image
@@ -2639,7 +2673,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
         cbar.set_label(cb_label)
         plt.show()
 
-    return {'implot': implot, 'cbar': cbar}
+    return {'implot': implot, 'cbar': cbar, 'ax':ax}
 
 def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None, **kwargs):
     """
