@@ -868,6 +868,9 @@ class radmc3dImage(object):
                 if fname is None:
                     fname = 'image.out'
 
+                if os.path.isfile(fname) is False:
+                    raise ValueError('file for image does not exist: %s'%fname)
+
                 print('Reading '+ fname)
 
                 self.filename = fname

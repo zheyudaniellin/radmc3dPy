@@ -542,9 +542,10 @@ def getOutput_op(op, mopac, dinfo, pngname, pltopwav=None):
     
     """
     ngs = len(dinfo['gsize'])
-    nxplots = np.ceil(np.sqrt(ngs))
-    nyplots = np.floor(ngs / nxplots)
-    fig, ax = plt.subplots(int(nxplots), int(nyplots), sharex='col', sharey='row')
+    nrow = np.floor(np.sqrt(ngs))
+    ncol = np.ceil(ngs / nrow)
+    nrow, ncol = int(nrow), int(ncol)
+    fig, ax = plt.subplots(nrow, ncol, sharex='col', sharey='row', figsize=(ncol*4, nrow*3))
     for ig in range(ngs):
         if isinstance(ax, np.ndarray):
             axii = ax[ig]
@@ -740,11 +741,11 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
     # spectrum
     if dooutput_sed and os.path.isfile('inp.spectruminc'):
         star = star = radsources.radmc3dRadSources()
-        star.readStarsinp()
+        star.readStarsinp(fdir=rundir)
         sedinc = fntools.zylreadvec('inp.spectruminc')
         nsedinc = len(sedinc)
         for ii in range(nsedinc):
-           fname = 'myspectrum.i%d.out'%(sedinc[ii])
+           fname = rundir + '/myspectrum.i%d.out'%(sedinc[ii])
            spec = image.radmc3dImage()
            spec.readSpectrum(fname=fname, dpc=dis)
            pngname = rundir + '/out_sed.i%d.png'%(sedinc[ii])
