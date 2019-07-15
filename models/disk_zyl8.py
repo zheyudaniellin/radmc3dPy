@@ -91,6 +91,7 @@ def getDefaultParams():
 	['sigp', '0.2', 'exponent value for sigma'],
         ['sigp2', '0.8', '2nd exponent for some sigma types'], 
 	['mdisk', '0.05*ms', 'mass of disk'],
+        ['sig0', '1e2', 'surface density at Rsig. this is used if mdisk is -1'], 
 	['sigma_type', '0', '0-polynomial, 1-exponential tapering'],
         ['cutgdens', '1e-30', 'cut for gas density'],
         # envelope
@@ -118,6 +119,7 @@ def getDefaultParams():
 	['H0', '7.5*au', 'height at Rt'],
 	['qheight', '1.125', 'height exponent'],
         ['hmode', "'0'", 'different height mode'], 
+        ['Rhouter', '70*au', 'outer radii for height taper'], 
 	['zqratio', '3.0', 'multiple of scale height for temperature transition'],
 	['hdel', '2.0', 'power of transition for temperature'],
         # alignment
@@ -349,10 +351,11 @@ def getGasDensity(grid=None, ppar=None):
 
     rhogas = np.zeros([grid.nx, grid.ny, grid.nz], dtype=np.float64) + 1e-30
     hh = fn_scaleheight(cyrr, ppar['Rt'], ppar['H0'], ppar['qheight'], 
-            ppar['Router'], 5., mode=ppar['hmode'])
+            ppar['Rhouter'], 5., mode=ppar['hmode'])
 
     sig_cyrr = fneq.eq_sig(cyrr, ppar['mdisk'], ppar['Rinner'], ppar['Rsig'], 
-        ppar['Router'], ppar['sigp'], ppar['sigma_type'], sigp2=ppar['sigp2'])
+        ppar['Router'], ppar['sigp'], ppar['sigma_type'], 
+        sigp2=ppar['sigp2'], sig0=ppar['sig0'])
 
     reg = hh > 0
     rhogas[reg] = sig_cyrr[reg] / np.sqrt(2.*np.pi) / hh[reg] * np.exp(-0.5*(zz[reg]/hh[reg])**2.)
@@ -460,10 +463,11 @@ def getDustDensity(grid=None, ppar=None):
 
     # disk component
     hh = fn_scaleheight(cyrr, ppar['Rt'], ppar['H0'], ppar['qheight'],
-            ppar['Router'], 5., mode=ppar['hmode'])
+            ppar['Rhouter'], 5., mode=ppar['hmode'])
 
     sig_cyrr = fneq.eq_sig(cyrr, ppar['mdisk'], ppar['Rinner'], ppar['Rsig'],
-        ppar['Router'], ppar['sigp'], ppar['sigma_type'], sigp2=ppar['sigp2'])
+        ppar['Router'], ppar['sigp'], ppar['sigma_type'], 
+        sigp2=ppar['sigp2'], sig0=ppar['sig0'])
 
     rho_disk = sig_cyrr * 0
     reg = hh > 0

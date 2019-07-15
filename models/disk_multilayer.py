@@ -134,7 +134,12 @@ def getDefaultParams():
         ['cuttemp', '10', 'temperature cut'],
         ['alph', '0.01', 'viscosity parameter. set to -1 to use dM (not implemented yet).'],
         ['dM', '0.', 'constant accretion rate across disk. Uses this if alph is -1'],
-        ['T0', '50', 'temperature at Rt'], 
+        ['T0mid', '50', 'mid plane temperature at Rt'], 
+        ['T0atm', '50', 'atmosphere temperature at Rt'], 
+        ['zqratio', '3', 'factor of Ht of where temperature transition occurs'],
+        ['qmid', '-0.5', 'midplane temperature exponent'], 
+        ['qatm', '-0.5', 'atmosphere temperature exponent'], 
+        ['hdel', '2', 'temperature transition exponent '], 
         # alignment
         ['altype', "'toroidal'", 'alignment type'], 
         ['B_R0', '[50*au, 50*au, 50*au]', ''],
@@ -185,12 +190,28 @@ def getGasTemperature(grid=None, ppar=None):
         raise ValueError('crd_sys not specified in ppar')
 
 #    tgas = np.sqrt(0.5 * ppar['rstar'][0] / cyrr) * ppar['tstar'][0]
-    tgas = ppar['T0'] * (cyrr / ppar['Rt'])**(-0.5)
+
+    ztrans = ppar['zqratio'] * ppar['Ht'] * (cyrr / ppar['Rt'])**(ppar['qheight'])
+
+    tatm = ppar['T0atm'] * (rr / ppar['Rt'])**ppar['qatm']
+    tmid = ppar['T0mid'] * (cyrr / ppar['Rt'])**ppar['qmid']
+
+    if ppar['zqratio'] > 0:
+        tgas = tatm
+        reg = zz < ztrans
+
+        tgas[reg] = tatm[reg] + (tmid[reg] - tatm[reg]) * ((np.cos(np.pi*0.5 * zz[reg]/ztrans[reg]))**(2*ppar['hdel']))
+    elif ppar['zqratio'] == 0:
+        tgas = tatm
+    elif ppar['zqratio'] == -1:
+        tgas = tmid
+    else:
+        raise ValueError('zqratio value not accepted')
+
     reg = tgas < ppar['cuttemp']
     tgas[reg] = ppar['cuttemp']
 
     return tgas
-
 
 def getDustTemperature(grid=None, ppar=None):
     """Calculates/sets the dust temperature

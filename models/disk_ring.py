@@ -119,8 +119,12 @@ def getDefaultParams():
         ['dHt', '[10*au]', 'scale height for each grain size'], 
         ['dqheight', '[1.25]', 'scale height power-law for dust'], 
         # temperature
-        ['T0', '50', 'temperature at Rt'], 
-        ['qtemp', '-0.5', 'temperature power-law index'], 
+        ['T0mid', '50', 'mid plane temperature at Rt'],
+        ['T0atm', '50', 'atmosphere temperature at Rt'],
+        ['zqratio', '3', 'factor of Ht of where temperature transition occurs'],
+        ['qmid', '-0.5', 'midplane temperature exponent'],
+        ['qatm', '-0.5', 'atmosphere temperature exponent'],
+        ['hdel', '2', 'temperature transition exponent '],
         ['cuttemp', '10', 'temperature cut']
               ]
 
@@ -160,12 +164,27 @@ def getGasTemperature(grid=None, ppar=None):
     else:
         raise ValueError('crd_sys not specified in ppar')
 
-    tgas = ppar['T0'] * (cyrr / ppar['Rt'])**(ppar['qtemp'])
+    ztrans = ppar['zqratio'] * ppar['Ht'] * (cyrr / ppar['Rt'])**(ppar['qheight'])
+
+    tatm = ppar['T0atm'] * (rr / ppar['Rt'])**ppar['qatm']
+    tmid = ppar['T0mid'] * (cyrr / ppar['Rt'])**ppar['qmid']
+
+    if ppar['zqratio'] > 0:
+        tgas = tatm
+        reg = abs(zz) < ztrans
+
+        tgas[reg] = tatm[reg] + (tmid[reg] - tatm[reg]) * ((np.cos(np.pi*0.5 * abs(zz[reg])/ztrans[reg]))**(2*ppar['hdel']))
+    elif ppar['zqratio'] == 0:
+        tgas = tatm
+    elif ppar['zqratio'] == -1:
+        tgas = tmid
+    else:
+        raise ValueError('zqratio value not accepted')
+
     reg = tgas < ppar['cuttemp']
     tgas[reg] = ppar['cuttemp']
 
     return tgas
-
 
 def getDustTemperature(grid=None, ppar=None):
     """Calculates/sets the dust temperature

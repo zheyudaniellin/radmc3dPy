@@ -9,7 +9,8 @@ import os
 def makemcImage(inc=[0., 45., 75., 90.], posang=None, 
                 camwav=[434., 870., 2600., 9098.4], wavfname=None, 
                 npix=300, sizeau=None, phi=0., 
-                dotausurf=False, dooptdepth=False):
+                dotausurf=False, dooptdepth=False, dostokes=True, 
+                secondorder=False):
     inc = np.array(inc, dtype=np.float64)
     ninc= len(inc)
 
@@ -24,7 +25,7 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
     for ii in range(ninc):
         fname = 'myimage.i%d.out'%(inc[ii])
         image.makeImage(npix=npix, loadlambda=1, incl=inc[ii], phi=phi, 
-            sizeau=sizeau, stokes=True, secondorder=0, nostar=True, 
+            sizeau=sizeau, stokes=dostokes, secondorder=secondorder, nostar=True, 
             posang=posang, 
             fname=fname)
 
@@ -45,7 +46,7 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
             fname = 'mytausurf1.i%d.out'%(inc[ii])
             image.makeImage(npix=npix, loadlambda=1, incl=inc[ii], phi=phi, 
                 sizeau=sizeau,stokes=True, secondorder=1, nostar=True, 
-                posang=posang, 
+                posang=posang, nphot_scat=1e3, 
                 fname=fname,tausurf=1.)
             if os.path.isfile('tausurface_3d.out'):
                 fname = 'mytau3d.i%d.out'%(inc[ii])
@@ -83,7 +84,7 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
 def makemcSpectrum(inc=[0.], posang=None,
                 camwav=[0.1, 1., 10., 100., 1e3, 1e4],
                 npix=300, sizeau=None, phi=0., 
-                nostar=False, noscat=False, secondorder=0):
+                nostar=False, noscat=False, secondorder=True):
     """ creates spectrum
     """
 

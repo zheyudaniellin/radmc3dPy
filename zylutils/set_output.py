@@ -204,7 +204,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     fig.savefig(pngname)
     plt.close()
 
-def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
+def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname):
     totdmass = dat.getDustMass()
     plt.figure(num=ifreq, figsize=(14,8))
 
@@ -251,6 +251,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
         else:
             ymax = xmax
             ymin = -xmax
+        plot2dmirror = True
     else:
         tau_y = None
         tau_z = None
@@ -258,6 +259,13 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
         tau_tta = None
         xmin, xmax = -dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au
         ymin, ymax = xmin, xmax	# cartesian coordinates
+        plot2dmirror = False
+
+    # overwrite xy limits
+    if tdxlim is not None:
+        xmin, xmax = tdxlim[0], tdxlim[1]
+    if tdylim is not None:
+        ymin, ymax = tdylim[0], tdylim[1]
 
     npltrow = 2
     npltcol = 3
@@ -273,7 +281,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
         contours=False, coverplot=True,
         clmin=1e-20, clmax=dat.rhodust.max(), cllog=True, ncl=11, clcol='w',
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%.1e',
-        lattitude=False, Sph2Cart=True, mirror=True)
+        lattitude=False, Sph2Cart=True, mirror=plot2dmirror)
     if (xmax is not None) and (ymax is not None):
         plt.text(xmax*0.9, ymin*0.9,
              'Total Dust=%.1e Msun'%(totdmass/natconst.ms),
@@ -298,7 +306,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
         contours=False, coverplot=True,
         clmin=1e-20, clmax=1e-10, cllog=True, ncl=11, clcol='w',
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%.1e',
-        lattitude=False, Sph2Cart=False, mirror=True)
+        lattitude=False, Sph2Cart=False, mirror=plot2dmirror)
     if (tau_r is not None) and (tau_tta is not None):
         plt.plot(tau_r, tau_tta*180./np.pi, 'w')
     plt.legend()
@@ -314,7 +322,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
         contours=False, coverplot=True,
         clmin=1., clmax=5e2, cllog=True, ncl=20, clcol='k',
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%d',
-        lattitude=False, Sph2Cart=True, mirror=True)
+        lattitude=False, Sph2Cart=True, mirror=plot2dmirror)
     if (tau_y is not None) and (tau_z is not None):
         plt.plot(tau_y, tau_z, 'w')
     plt.legend()
@@ -337,7 +345,7 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname):
         contours=False, coverplot=True,
         clmin=1., clmax=5e2, cllog=True, ncl=20, clcol='k',
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%d',
-        lattitude=False, Sph2Cart=False, mirror=True)
+        lattitude=False, Sph2Cart=False, mirror=plot2dmirror)
     if (tau_r is not None) and (tau_tta is not None):
         plt.plot(tau_r, tau_tta*180./np.pi, 'w')
     plt.legend()
@@ -642,11 +650,44 @@ def getOutput_sed(spec, pngname, star=None, pltsed=None):
 def getOutput_compreal():
     """ compares the real images to calculated images
     """
+
+def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None):
+    """
+    plots all the images across wavelength
+
+    """
+    if imTblim is None:
+        vlim = [0, None]
+    else:
+        vlim = imTblim
+    if imxlim is None:
+        imxlim = (im.x.min()/natconst.au, im.x.max()/natconst.au)
+    if imylim is None:
+        imylim = (im.y.min()/natconst.au, im.y.max()/natconst.au)
+
+    nwav = len(im.wav)
+    nrow = np.floor(np.sqrt(nwav))
+    ncol = np.ceil(nwav / nrow)
+    nrow, ncol = int(nrow), int(ncol)
+    fig = plt.figure(figsize=(ncol*4, nrow*3))
+    for ii in range(nwav):
+        axii = fig.add_subplot(nrow,ncol, ii+1)
+        dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet, 
+            stokes='I', bunit='Tb', dpc=dis, vmin=vlim[0], vmax=vlim[1], 
+            ifreq=ii, clevs=[20,40,60,80, 100], clcol='k',  
+            oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
+        axii.set_xlim(imxlim)
+        axii.set_ylim(imylim)
+    fig.tight_layout()
+    fig.savefig(pngname)
+    plt.close()
+
 # ------------------------------------------------------------
 def commence(rundir, polunitlen=-2, dis=400, polmax=None, 
         dooutput_op=1, pltopwav=None, 
         dooutput_im=1, imTblim=None, imxlim=None, imylim=None, 
-        dooutput_xy=0, xyinx=None, 
+        dooutput_wavim=1, 
+        dooutput_xy=0, xyinx=None, tdxlim=None, tdylim=None, 
         dooutput_minor=0, 
         dooutput_stokes=0,
         dooutput_conv=0, fwhm=None, pa=[[0]], 
@@ -709,7 +750,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
     # read dust density and temperature
     dat = analyze.readData(fdir=rundir, binary=False, ddens=True, dtemp=True)
     # see if heatsource.inp exists to read accretion luminosity
-    if os.path.isfile(rundir + '/heatsource.inp'):
+    if os.path.isfile(os.path.join(rundir, 'heatsource.inp')):
         qvisdat = analyze.readData(fdir=rundir, binary=False, qvis=True)
         acclum = qvisdat.getHeatingLum()
     else:
@@ -753,10 +794,10 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
 
     # start iterating image related 
     for ii in range(ninc):
-        fname = rundir + '/myimage.i%d.out'%(imageinc[ii])
+        fname = os.path.join(rundir, 'myimage.i%d.out'%(imageinc[ii]))
         im = image.readImage(fname=fname)
 
-        fname = rundir + '/mytausurf1.i%d.out'%(imageinc[ii])
+        fname = os.path.join(rundir, 'mytausurf1.i%d.out'%(imageinc[ii]))
         if os.path.isfile(fname):
             tauim = image.readImage(fname=fname)
         else:
@@ -768,13 +809,17 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
         else:
             tau3d = None
 
-        fname = rundir + '/myoptdepth.i%d.out'%(imageinc[ii])
+        fname = os.path.join(rundir,'myoptdepth.i%d.out'%(imageinc[ii]))
         if os.path.isfile(fname):
             optim = image.readImage(fname=fname)
         else:
             optim = None
  
-        camwav = image.readCameraWavelength(fname=rundir+'/camera_wavelength_micron.inp.image')
+        camwavfile = os.path.join(rundir, 'camera_wavelength_micron.inp.image')
+        if os.path.isfile(camwavfile):
+            camwav = image.readCameraWavelength(fname=rundir+'/camera_wavelength_micron.inp.image')
+        else:
+            camwav = im.wav
         ncamwav = len(camwav)
 
         # line of sight properties along minor axis
@@ -792,6 +837,11 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                 ylostemp[iy] = lostemp
                 ylosdens[iy] = losdens
 
+        # plot images through all wavelengths
+        if dooutput_wavim:
+            pngname = rundir + '/out_wavim.i%d.png'%imageinc[ii]
+            getOutput_wavim(im, dis, pngname, imTblim=imTblim, imxlim=imxlim, imylim=imylim)
+
         ifreq = 0
         for ifreq in range(ncamwav):
             kext = fkabs(camwav[ifreq]) + fksca(camwav[ifreq])
@@ -805,11 +855,11 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                 if xyinx is not None:
                     if (xyinx[0] == ii) and (xyinx[1] == ifreq):
                         pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                        getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname)
+                        getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname)
 
                 else:
                     pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                    getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, pngname)
+                    getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname)
 
             if dooutput_minor:
                 pngname=rundir+'/out_minor.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
@@ -831,21 +881,28 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
             # output to fits file
                 if im.stokes: #if stokes image
                     for isk in range(4):
-                        fitsname = rundir + '/myimage.i%d.f%d.%s.fits'%(imageinc[ii], camwav[ifreq],stokespref[isk])
+                        fitsname = os.path.join(rundir, 'myimage.i%d.f%d.%s.fits'%(imageinc[ii], camwav[ifreq],stokespref[isk]) )
                         im.writeFits(fname=fitsname, dpc=dis, casa=True, 
                             bandwidthmhz=bwidthmhz, coord=coord, 
-                            stokes=stokespref[isk], ifreq=ifreq)
+                            stokes=stokespref[isk], ifreq=ifreq, overwrite=True)
                 else:
-                    fitsname = rundir + '/myimage.i%d.f%d.fits'%(imageinc[ii], camwav[ifreq])
-                    im.writeFits(fname=fname, dpc=dis, casa=True,
+                    fitsname = os.path.join(rundir, 'myimage.i%d.f%d.fits'%(imageinc[ii], camwav[ifreq]) )
+                    im.writeFits(fname=fitsname, dpc=dis, casa=True,
                         bandwidthmhz=bwidthmhz, coord=coord, 
-                        stokes='I', ifreq=ifreq)
+                        stokes='I', ifreq=ifreq, overwrite=True)
 
 
         if (dooutput_conv) & (fwhm is not None):
             npa = len(pa)
             for ipa in range(npa):
                 conv = im.imConv(dpc=dis, psfType='gauss', fwhm=fwhm[ipa], pa=pa[ipa])
+
+                # plot convolved image through all wavelengths
+                if dooutput_wavim:
+                    pngname = rundir + '/out_wavim.i%d.b%d.png'%(imageinc[ii], ipa)
+                    getOutput_wavim(conv, dis, pngname, imTblim=imTblim, 
+                        imxlim=imxlim, imylim=imylim)
+
                 for ifreq in range(ncamwav):
                     if dooutput_im:
                         pngname = rundir+'/out_im.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
@@ -868,15 +925,15 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                     if dooutput_fits:
                         if conv.stokes:
                             for isk in range(4):
-                                fitsname = 'myimage.i%d.f%d.%s.b%d.fits'%(imageinc[ii], camwav[ifreq],stokespref[isk], ipa)
+                                fitsname = os.path.join(rundir, 'myimage.i%d.f%d.%s.b%d.fits'%(imageinc[ii], camwav[ifreq],stokespref[isk], ipa))
                                 conv.writeFits(fname=fitsname, dpc=dis, casa=True, 
                                     bandwidthmhz=bwidthmhz, coord=coord, 
-                                    stokes=stokespref[isk], ifreq=ifreq)
+                                    stokes=stokespref[isk], ifreq=ifreq, overwrite=True)
                         else:
-                            fitsname = 'myimage.i%d.f%d.b%d.fits'%(imageinc[ii], camwav[ifreq], ipa)
-                            conv.writeFits(fname=fname, dpc=dis, casa=True, 
+                            fitsname = os.path.join(rundir, 'myimage.i%d.f%d.b%d.fits'%(imageinc[ii], camwav[ifreq], ipa))
+                            conv.writeFits(fname=fitsname, dpc=dis, casa=True, 
                                 bandwidthmhz=bwidthmhz, coord=coord, 
-                                stokes='I', ifreq=ifreq)
+                                stokes='I', ifreq=ifreq, overwrite=True)
                 # free up this memory
                 del conv
 

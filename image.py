@@ -355,7 +355,7 @@ class radmc3dImage(object):
 
     # --------------------------------------------------------------------------------------------------
     def writeFits(self, fname='', dpc=1., coord='03h10m05s -10d05m30s', bandwidthmhz=2000.0,
-                  casa=False, nu0=0., stokes='I', fitsheadkeys=[], ifreq=None):
+                  casa=False, nu0=0., stokes='I', fitsheadkeys=[], ifreq=None, overwrite=False):
         """Writes out a RADMC-3D image data in fits format. 
 
         Parameters
@@ -392,6 +392,9 @@ class radmc3dImage(object):
         ifreq        : int
                        Frequency index of the image array to write. If set only this frequency of a multi-frequency
                        array will be written to file.
+
+        overwrite    : boolean
+                       If True, overwrite the new fits file. If False, will ask whether or not to overwrite.  Default is False
         """
         # --------------------------------------------------------------------------------------------------
         istokes = 0
@@ -628,12 +631,17 @@ class radmc3dImage(object):
 
         if os.path.exists(fname):
             print(fname + ' already exists')
-            dum = input('Do you want to overwrite it (yes/no)?')
-            if (dum.strip()[0] == 'y') | (dum.strip()[0] == 'Y'):
+            if overwrite:
+                print('overwrite = True')
                 os.remove(fname)
                 hdu.writeto(fname)
             else:
-                print('No image has been written')
+                dum = input('Do you want to overwrite it ("yes"/"no")?')
+                if (dum.strip()[0] == 'y') | (dum.strip()[0] == 'Y'):
+                    os.remove(fname)
+                    hdu.writeto(fname)
+                else:
+                    print('No image has been written')
         else:
             hdu.writeto(fname)
             # --------------------------------------------------------------------------------------------------
@@ -1565,7 +1573,7 @@ def readImage(fname=None, binary=False, old=False, dpc=1.):
     dum.readImage(fname=fname, binary=binary, old=old, dpc=dpc)
     return dum
 
-def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
+def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, recen=None, padnan=None):
     """Reads a fits image and puts the information into a radmc3dImage object.
     Parameters
     ----------
@@ -1579,7 +1587,10 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
                   The wavelength of this image. If this is given, this will be preferred over the fits file
                   The number of elements must be the same as the number of elements of the third axis of 
                   the fits file
-
+        recen   : list of 2 floats
+                  The new center relative to the original, in arcseconds
+        padnan  : float
+                  value to give for locations with nan
     Returns
     -------
         res     : radmc3dImage object
@@ -1597,7 +1608,14 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
 
     hdul = pf.open(fname)
     hdr = hdul[0].header
+
+    # data
     fitsdat = hdul[0].data
+
+    if padnan is not None:
+        reg = np.isnan(fitsdat)
+        fitsdat[reg] = padnan
+
     cdelt1 = hdr['cdelt1'] * 3600. #in arcsec
     naxis1 = hdr['naxis1']
     ctype1 = hdr['ctype1']
@@ -1691,9 +1709,15 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, ):
     else:
         isJypBeam = False
 
-    x = (np.array(range(naxis1)) - crpix1) * cdelt1 - 0.0 #this is in arcsec
+    # recalculate center
+    if recen is None:
+        xcen, ycen = 0, 0
+    else:
+        xcen, ycen = recen[0], recen[1]
+
+    x = (np.array(range(naxis1)) - crpix1) * cdelt1 - xcen #this is in arcsec
     x = x * dpc * nc.au 	#converted to cm
-    y = (np.array(range(naxis2)) - crpix2) * cdelt2 - 0.0
+    y = (np.array(range(naxis2)) - crpix2) * cdelt2 - ycen
     y = y * dpc * nc.au
     if crvalz is not None:
         z = (np.array(range(nfreq)) - crpixz) * cdeltz + crvalz
@@ -2184,25 +2208,27 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
             data = data / norm
 
         clipnorm = data.max()
-        # Check if the data should be plotted on a log scale
-        # some data may be negative
+        # Check if the data should be plotted on a log scale even considering the negative
+        # negative after logged
         if log:
-            imgge0 = data >=0
+            imgpos = data >0
+            imgeq0 = data == 0
             imgneg = data < 0
 
-#            clipmin = np.log10(data[data > 0.].min())
-#            data = np.log10(data.clip(1e-90))
+            if True in imgpos:
+                data[imgpos] = np.log10(data[imgpos])
+            if True in imgeq0:
+                data[imgeq0] = data[imgpos].min() 
             if True in imgneg:
-                clipmin = -np.log10(abs(data.min()))
-            else: #if only positives
-                clipmin = np.log10(data[imgge0]).min()
+                data[imgneg] = np.nan
+#                raise ValueError('data is negative but log is on. not acceptable now')
 
-            data[imgge0] = np.log10(data[imgge0].clip(1e-90))
-            data[imgneg] = -np.log10(abs(data[imgneg]))
+            # clipmin is the minimum after logged
+            clipmin = np.nanmin(data)
 
             # Clipping the data
             if maxlog is not None:
-                clipmin = -maxlog + np.log10(clipnorm)
+                clipmin = maxlog
         else:
             clipmin = data.min()
 
@@ -3419,7 +3445,7 @@ def plotMovie():
 
 def makeSpectrum(npix=None, incl=None, wav=None, sizeau=None, 
               phi=None, posang=None, pointau=None,
-              fluxcons=True, nostar=False, noscat=False, secondorder=1,
+              fluxcons=True, nostar=False, noscat=False, secondorder=True,
               lambdarange=None, nlam=None, loadlambda=False,
               binary=False, fname=''):
     """ creates spectrum based on radmc3d
@@ -3617,6 +3643,69 @@ def readTauSurf3D(fname='tausurface_3d.out'):
 
     return {'nx':nx, 'ny':ny, 'nwav':nwav, 'wav':wav, 
             'x':x, 'y':y,'z':z}
+
+def getTb(im, wav=None, freq=None, bunit='inu', rj=False, 
+    dpc=None, dxy=None, 
+    fwhm=None):
+    """
+    calculate brightness temperature based on an image
+
+    Paramters
+    ---------
+
+        im : ndarray, in units of bunit
+        bunit : unit of given ndarray
+            'inu' : intensity
+            'jy/beam': needs fwhm
+            'jy/pix': needs dpc, dxy
+        wav : float
+            wavelength in micron
+        freq : float
+            frequency in Hz. use either wav or freq
+        dpc : float
+            distance in pc
+        dxy : list, [dx, dy]
+            pixel size in cm. Assume uniform step size in x,y
+        fwhm : list
+            beam fwhm in arcsec
+    """
+    if wav is None and freq is None:
+        raise ValueError('wavelength or frequency must be given')
+    if wav is not None and freq is not None:
+        raise ValueError('only one of wavelength or frequency can be given')
+
+    if freq is None:
+        freq = nc.cc * 1e4 / wav
+    if wav is None:
+        wav = nc.cc  * 1e4 / freq
+
+    # determine from bunit
+    if bunit.lower() == 'inu':
+        inten = im
+
+    elif bunit.lower() == 'jy/pixel':
+        beam_area = dxy[0] * dxy[1] / (dpc * nc.pc)**2
+        inten = im / beam_area / 1e23
+
+    elif bunit.lower() == 'jy/beam':
+        beam_area = (fwhm[0]/3600.*np.pi/180) * (fwhm[1]/3600.*np.pi/180) * np.pi / 4. / np.log(2.0)
+        inten = im / beam_area / 1e23
+
+    else:
+        raise ValueError('bunit does not exist: %s'%bunit)
+
+    # convert from intensity to temperature
+    ld2 = wav**2
+    hmu = nc.hh * freq
+    hmu3_c2 = nc.hh * freq**3 / nc.cc**2
+    if rj:
+        tb = wav / 2. / nc.kk * inten
+    else:
+        tb = 0 * inten
+        reg = (inten > 0) & ~np.isnan(inten)
+        tb[reg] = hmu / nc.kk / np.log(2. * hmu3_c2 / (inten[reg] + 1e-90) + 1.)
+
+    return tb
 
 # ----------------------------------------------------------------------
 # ------------------ Circular image ------------------------------------

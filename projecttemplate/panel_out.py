@@ -14,7 +14,9 @@ if os.path.isdir(runname) is False:
 datacp = ['dustopac.inp', 'dustinfo.zyl', 'dustkap*.inp']
 # data to be moved
 datamv = ['dust_temperature.dat', 'dust_density.inp',
-          'my*.out', 'myimag*.fits',
+          'myimage*.out', 'mytausurf*.out', 'myspectrum*.out', 
+          'mytau3d*.out', 'myoptdepth*.out', 
+          'myimag*.fits',
           'amr_grid.inp', 'camera_wavelength_micron.inp',
           'grainalign_dir.inp', 'inp.imageinc', 'inp.spectruminc', 
           'camera_wavelength_micron.inp.image', 'radmc3d.inp',

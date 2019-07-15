@@ -1138,7 +1138,7 @@ class radmc3dData(object):
         return tot_lum
  
 
-    def writeDustDens(self, fname='', binary=True, old=False, octree=False,fdir=None):
+    def writeDustDens(self, fname='', binary=False, old=False, octree=False,fdir=None):
         """Writes the dust density.
 
         Parameters
@@ -1167,10 +1167,7 @@ class radmc3dData(object):
                 else:
                     fname = 'dust_density.inp'
                 if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
+                    fname = os.path.join(fdir, fname)
 
             print('Writing ' + fname)
 #            if self.grid.crd_sys is 'sph':
