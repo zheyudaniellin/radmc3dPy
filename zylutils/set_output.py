@@ -205,6 +205,16 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     plt.close()
 
 def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname):
+    """ calculate meridonial density and temperature
+    Parameters
+    ----------
+    ifreq : int
+    tau3d : 
+    tdxlim : tuple of 2 floats
+        (xmin, xmax) where x is the radius coordinate
+    tdylim : tuple of 2 floats
+        (ymin, ymax) where y is the height coordinate
+    """
     totdmass = dat.getDustMass()
     plt.figure(num=ifreq, figsize=(14,8))
 
@@ -479,6 +489,9 @@ def getOutput_minor(ifreq, im, optim, kpara90, korth90, kext, ylostemp, ylosdens
         plt.plot(optim.y/natconst.au, opdepth)
         plt.title('Optical Depth')
         plt.xlabel('Y [AU]')
+        plt.yscale('log')
+        if optim.y.max() > 1:
+            plt.axhline(y=1., color='k', linestyle=':')
 
     # dT/dtau
     isub = isub + 1
@@ -709,6 +722,9 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
     xyinx : tuple
             2 element tuple to specify which image to plot xy. 
             In (a,b) where a is the index for inclination and b is for wavelength
+    tdxlim : tuple
+    tdylim : tuple
+        2 element tuple
     fwhm : list
          number of different resolutions by number of wavelengths in image.out
     pa   : list

@@ -16,6 +16,7 @@ except ImportError:
 
 from . import natconst as nc
 
+import os
 import pdb
 
 class radmc3dGrid(object):
@@ -647,10 +648,7 @@ class radmc3dGrid(object):
             if fname == '':
                 fname = 'amr_grid.inp'
                 if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
+                    fname = os.path.join(fdir, fname)
 
             print('Writing ' + fname)
             with open(fname, 'w') as wfile:
@@ -661,9 +659,11 @@ class radmc3dGrid(object):
                 # Coordinate system (0-99 cartesian, 100-199 spherical, 200-299 cylindrical)
                 if self.crd_sys == 'car':
                     wfile.write('%d\n' % 0)
+
                 # Coordinate system (10 - plane-parallel)
                 if self.crd_sys == 'ppl':
                     wfile.write('%d\n' % 10)
+
                 # Coordinate system (0-99 cartesian, 100-199 spherical, 200-299 cylindrical)
                 if self.crd_sys == 'sph':
                     wfile.write('%d\n' % 100)

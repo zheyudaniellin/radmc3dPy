@@ -41,20 +41,30 @@ def create_params(temp2ddir, mopac0, scatmode):
     par.writeParfile(fdir=temp2ddir)
     return par, par0
 
-def create_opac(temp2ddir, mopac0, op, scatmode):
+def create_opac(temp2ddir, mopac0, op):
+    """ create opacity for temperature calculations
+    """
+    # copy dustinfo.zyl, since that won't be changed
     os.system('cp dustinfo.zyl '+temp2ddir)
+
     ndust = len(mopac0['ext'])
-    opac_align = mopac0['align']
+    opac_align = mopac0['align'][0]
 
     for ig in range(ndust):
+        # find the original opacity files and copy it to temp2d
         if mopac0['scatmat'][ig]:
             fname = 'dustkapscatmat_%s.inp'%(mopac0['ext'][ig])
+            scatmode_max = 5
         else:
             fname = 'dustkappa_%s.inp'%(mopac0['ext'][ig])
+            scatmode_max = 2
         os.system('cp %s %s'%(fname, temp2ddir))
+
+    # if alignment is turned on, turn it off when calculating temperature
+    # copy the original settings of dustopac.inp, but just turn off alignment
     if opac_align:
         op.writeMasterOpac(ext=mopac0['ext'], therm=mopac0['therm'],
-            scattering_mode_max=int(scatmode), alignment_mode=0, fdir=temp2ddir)
+            scattering_mode_max=scatmode_max, alignment_mode=0, fdir=temp2ddir)
     return 0
 
 def create_grid(temp2ddir, par, par0):
@@ -182,7 +192,7 @@ def pipeline(dohydroeq=0, itermax=0, scatmode='1'):
     par, par0 = create_params(temp2ddir, mopac0, scatmode)
 
     # recreate opacity
-    dum = create_opac(temp2ddir, mopac0, op0, scatmode)
+    dum = create_opac(temp2ddir, mopac0, op0)
 
     # recreate radmc3d.inp
     setup.writeRadmc3dInp(modpar=par, fdir=temp2ddir)

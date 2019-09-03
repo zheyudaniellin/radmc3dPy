@@ -20,7 +20,8 @@ datamv = ['dust_temperature.dat', 'dust_density.inp',
           'amr_grid.inp', 'camera_wavelength_micron.inp',
           'grainalign_dir.inp', 'inp.imageinc', 'inp.spectruminc', 
           'camera_wavelength_micron.inp.image', 'radmc3d.inp',
-          'stars.inp', 'wavelength_micron.inp', 'problem_params.inp'
+          'stars.inp', 'wavelength_micron.inp', 'problem_params.inp', 
+          'heatsource.inp'
          ]
 dirmv = ['temp2d']
 

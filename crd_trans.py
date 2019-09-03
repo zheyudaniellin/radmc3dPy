@@ -59,11 +59,18 @@ def ctransSph2Cart(crd=None, reverse=False):
         z = crd[2]
 
         r = np.sqrt(x**2 + y**2 + z**2)
-        phi = np.arccos(x / np.sqrt(x**2 + y**2) + 1e-90)
-        theta = np.arccos(z / r)
 
-        if y < 0.0:
-            phi = 2.0 * np.pi - phi
+#        phi = np.arccos(x / np.sqrt(x**2 + y**2) + 1e-90)
+#        if y < 0.0:
+#            phi = 2.0 * np.pi - phi
+        phi = np.arctan2(y, x)
+        reg = phi < 0
+        phi[reg] = phi[reg] + 2*np.pi
+
+#        theta = np.arccos(z / r)
+        theta = np.arctan2(np.sqrt(x**2 + y**2), z)
+        reg = theta < 0
+        theta[reg] = theta[reg] + 2*np.pi
 
         crdout = [r, theta, phi]
 
@@ -557,4 +564,103 @@ def contCart2Sph(contCart=None, xaxis=None, zaxis=None, raxis=None, ttaaxis=None
     contSph = {'contSph':contout, 'raxis':raxis, 'ttaaxis':ttaaxis}
     return contSph
 
+def findValin2D(xaxis, yaxis, dat2d, xvec, yvec, padvalue=None):
+    """
+    finds the value in 2d data, by simply finding the neighbors and do linear weighting
+    Parameters
+    ----------
+    xaxis : numpy 1d array
+        x axis for dat 2d
+    yaxis : numpy 1d array
+        y axis for dat 2d
+    dat2d : numpy 2d array 
+        2 dimensional data
+    xvec, yvec : numpy 1d arrays
+        each are the x and y coordinates to find value
+
+    Returns
+    -------
+    vec : numpy 1d array 
+    """
+    def searchaxis(axisin, xin):
+        # find the closest two indices of axisin for value xin
+        if xin >= axisin.max():
+            raise ValueError('xin greater than axisin')
+        if xin <= axisin.min():
+            raise ValueError('xin greater than axisin')
+        naxis = len(axisin)
+
+        inx = np.argmin(abs(axisin-xin))
+        if axisin[inx] == xin:
+            inx1 = inx
+            inx2 = inx
+        elif (inx == 0):
+            inx1 = 0
+            inx2 = 1
+        elif (inx == naxis-1):
+            inx1 = inx-1
+            inx2 = inx
+        elif ( (axisin[inx] - xin) * (axisin[inx+1]-xin) ) < 0:
+            inx1 = inx
+            inx2 = inx+1
+        elif ( (axisin[inx-1] - xin) * (axisin[inx] - xin) ) < 0:
+            inx1 = inx-1
+            inx2 = inx
+        else:
+            raise ValueError('problem in searchaxis')
+        # check
+        if (axisin[inx1] - xin) * (axisin[inx2] - xin) > 0:
+            raise ValueError('problem in search axis. did not find closest indices')
+
+        return np.array([inx1, inx2])
+
+    def interp_wgt(x1, x2, f1, f2, xin):
+        # interpolate by weighting. used for extracting spectra from cube
+        if x1 == x2:
+            raise ValueError('x1 and x2 should not be equal for interpolation')
+        if (xin - x1) * (xin - x2) > 0:
+            raise ValueError('xin is outside of [x1, x2]')
+        if xin == x1:
+            y = f1
+        if xin == x2:
+            y = f2
+        y = ( (xin - x1) * f2 + (x2-xin) * f1 ) / (x2 - x1)
+        return y
+
+    # ==== begin calculation ====
+    if padvalue is None:
+        padvalue = np.nan
+
+    nvec = len(xvec)
+    vec = np.zeros([nvec], dtype=np.float64)
+
+    for ii in range(nvec):
+        if (xvec[ii] < xaxis.min()) | (xvec[ii]>xaxis.max()):
+            vec[ii] = padvalue
+            continue
+        if (yvec[ii] < yaxis.min()) | (yvec[ii] > yaxis.max()):
+            vec[ii] = padvalue
+            continue
+        xab = searchaxis(xaxis, xvec[ii])
+        yab = searchaxis(yaxis, yvec[ii])
+        if (xab[0] == xab[1]) & (yab[0] == yab[1]):
+            vec[ii] = dat2d[xab[0], yab[0]]
+        elif (xab[0] == xab[1]):
+            fy1 = dat2d[xab[0], yab[0]]
+            fy2 = dat2d[xab[0], yab[1]]
+            vec[ii] = interp_wgt(yaxis[yab[0]], yaxis[yab[1]], fy1, fy2, yvec[ii])
+        elif (yab[0] == yab[1]):
+            fx1 = dat2d[xab[0], yab[0]]
+            fx2 = dat2d[xab[1], yab[0]]
+            vec[ii] = interp_wgt(xaxis[xab[0]], xaxis[xab[1]], fx1, fx2, xvec[ii])
+        else:
+            fy1x1 = dat2d[xab[0], yab[0]]
+            fy1x2 = dat2d[xab[1], yab[0]]
+            fy1 = interp_wgt(xaxis[xab[0]],xaxis[xab[1]],fy1x1,fy1x2,xvec[ii])
+            fy2x1 = dat2d[xab[0], yab[1]]
+            fy2x2 = dat2d[xab[1], yab[1]]
+            fy2 = interp_wgt(xaxis[xab[0]],xaxis[xab[1]],fy2x1,fy2x2,xvec[ii])
+            vec[ii] = interp_wgt(yaxis[yab[0]], yaxis[yab[1]], fy1, fy2, yvec[ii])
+
+    return vec
 

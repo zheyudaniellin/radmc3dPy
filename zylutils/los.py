@@ -1,8 +1,9 @@
 # for calculating line-of-sight properties
 import numpy as np
 import scipy.interpolate as sip
+from scipy.interpolate import RegularGridInterpolator
 import pdb
-from radmc3dPy import natconst
+from radmc3dPy import natconst, crd_trans
 
 def interpcont(yvec, zvec, cont, rstg, ttastg, pad):
     """
@@ -29,10 +30,6 @@ def interpcont(yvec, zvec, cont, rstg, ttastg, pad):
     if nttas != cshape[1]:
         raise ValueError('shape of 2d array is different from theta')
 
-    # create the inteprolation object
-    fcont = sip.interp2d(rstg, ttastg, cont.T, kind='linear',
-        fill_value=pad, bounds_error=False)
-
     # find the corresponding radius and theta vectors
     # y = r sin(theta)
     # z = r cos(theta)
@@ -41,16 +38,24 @@ def interpcont(yvec, zvec, cont, rstg, ttastg, pad):
     reg = tvec < 0.
     tvec[reg] = tvec[reg] + 2.*np.pi
 
+    # create the inteprolation object
+    fcont = sip.interp2d(rstg, ttastg, cont.T, kind='linear',
+        fill_value=pad, bounds_error=False)
     vals = np.zeros(nvec, dtype=np.float64)
     for iv in range(nvec):
         vals[iv] = fcont(rvec[iv], tvec[iv])
 
+#    vals = crd_trans.findValin2D(rstg, ttastg, cont, rvec, tvec, padvalue=pad)
+
     return vals, rvec, tvec
 
-def getZlos(raxis, ttaaxis, zlosmax=None):
+def getZlos(raxis, ttaaxis, zlosmax=None, nzlos=None):
     # determine a good grid for line of sight z
     nr = len(raxis)
-    minr = min([0.01*natconst.au, raxis[0]])
+    if nzlos is None:
+        nzlos = nr / 2
+#    minr = min([0.01*natconst.au, raxis[0]])
+    minr = raxis[0]
     if zlosmax is None:
         maxr = max(raxis) * 0.75
     else:
@@ -58,7 +63,8 @@ def getZlos(raxis, ttaaxis, zlosmax=None):
     if maxr < minr:
         raise ValueError('minr cannot be greater than maxr')
 
-    rlen = maxr * (minr / maxr)**(np.arange(nr)/float(nr-1))
+    rlen = np.geomspace(minr, maxr, nzlos)
+
     # rlen = raxis
     zlosi = np.concatenate((rlen, np.array([0.]), -rlen), axis=0)
     zlosi.sort()
@@ -67,8 +73,10 @@ def getZlos(raxis, ttaaxis, zlosmax=None):
     return zlosi, zlos
 
 
-def extract(inc, ym, cont2d, raxis, rstg, ttaaxis, ttastg, pad, zlosmax=None):
+def extract(inc, ym, cont2d, raxis, rstg, ttaaxis, ttastg, pad, zlosmax=None, nzlos=None):
     """
+    extract profiles specifically along the minor axis 
+
     Parameters:
     inc = float
         inclination in rad
@@ -98,6 +106,7 @@ def extract(inc, ym, cont2d, raxis, rstg, ttaaxis, ttastg, pad, zlosmax=None):
         'zcell' : cell z in disk coordinates, 'zwall' : in wall
     """
     # determine the symmetries
+    # mirror symmetry across midplane
     mirrorsym = 0
     if ttastg.max() < np.pi/2.:
         # mirror symmetric
@@ -106,13 +115,12 @@ def extract(inc, ym, cont2d, raxis, rstg, ttaaxis, ttastg, pad, zlosmax=None):
     axisym = 1
 
     # calculate zlos
-    zlosi, zlos = getZlos(raxis, ttaaxis, zlosmax=zlosmax)
+    zlosi, zlos = getZlos(raxis, ttaaxis, zlosmax=zlosmax, nzlos=nzlos)
 
     # calculate sky to disk coordinates
-    yvec0 = np.cos(inc) * ym - np.sin(inc) * zlos
-    yvec = yvec0
-    zvec0 = np.sin(inc) * ym + np.cos(inc) * zlos
-    zvec = zvec0
+    yvec = np.cos(inc) * ym + np.sin(inc) * zlos
+    zvec = np.sin(inc) * ym - np.cos(inc) * zlos
+
 
     if axisym:
         yvec = np.abs(yvec)
@@ -123,8 +131,8 @@ def extract(inc, ym, cont2d, raxis, rstg, ttaaxis, ttastg, pad, zlosmax=None):
     valcell, rvec, tvec = interpcont(yvec, zvec, cont2d, rstg, ttastg, pad)
 
     # use zwalls
-    ywall = np.cos(inc) * ym - np.sin(inc) * zlosi
-    zwall = np.sin(inc) * ym + np.cos(inc) * zlosi
+    ywall = np.cos(inc) * ym + np.sin(inc) * zlosi
+    zwall = np.sin(inc) * ym - np.cos(inc) * zlosi
     if axisym:
         ywall = np.abs(ywall)
     if axisym and mirrorsym:
@@ -137,31 +145,118 @@ def extract(inc, ym, cont2d, raxis, rstg, ttaaxis, ttastg, pad, zlosmax=None):
                   'ywall':ywall, 'zwall':zwall}
     return losout
 
+def extract3d(xaxis, yaxis, zaxis, dat3d, crd_sys, xvec,yvec, zvec, pad=0.):
+    """
+    extract profiles based on given Cartesian coordinates.
+    The 3d data can be spherical or cartesian
+    
+    Parameters 
+    ----------
+    xaxis : first axis
+    yaxis : second axis
+    zaxis : third axis
+    dat3d : the three dimensional data
+    crd_sys : string
+        'sph' for spherical coordinates
+        'car' for cartesian coordinates
+    xvec, yvec, zvec : the coordinates in Cartesian coordinates
+    
+    """
+    func = RegularGridInterpolator((xaxis, yaxis, zaxis), dat3d, 
+        method='linear', bounds_error=False, fill_value=pad)
+
+    # convert x,y,z coordinates to spherical coordinates
+    if crd_sys == 'car':
+        profx = xvec
+        profy = yvec
+        profz = zvec
+    elif crd_sys == 'sph':
+        # radius
+        profx = np.sqrt(xvec**2 + yvec**2 + zvec**2)
+
+        # theta
+        tvec = np.arctan2(zvec, np.sqrt(xvec**2 + yvec**2))
+        reg = tvec < 0.
+        tvec[reg] = tvec[reg] + 2.*np.pi
+        profy = tvec
+
+        # azimuth
+        pvec = np.arctan2(yvec, xvec)
+        reg = pvec < 0
+        pvec[reg] = pvec[reg] + 2*np.pi
+        profz = pvec
+
+    nvec = len(xvec)
+    prof = np.zeros([nvec], dtype=np.float64)
+    for ii in range(nvec):
+        prof[ii] = func([profx[ii], profy[ii], profz[ii]])
+
+    return prof
+
+def getTauz(zlosi, zlos, rho, kap):
+    """ calculate optical depth as a function of line of sight
+    Parameter
+    --------
+    zlosi : line of sight wall coordinate. increases further from the observer
+    zlos  : line of sight cell coordinate
+    rho   : line of sight cell density 
+    kap   : line of sight opacity
+    """
+    nz = len(zlosi)
+    nzs = nz - 1
+    dzlos = zlosi[1:] - zlosi[:-1]
+
+    dtaustg = kap * rho * dzlos
+    tau = np.zeros(nz, dtype=np.float64)
+    for iz in range(nzs):
+        tau[iz+1] = sum(dtaustg[:iz+1])
+    taustg = 0.5 * (tau[1:] + tau[:-1])
+    return tau, dtaustg, taustg
+
 def getTauLos(losdens, kap):
     """
     losdens = losout package the calculated density
     kap = float. opacity
     """
     rhocell = losdens['valcell']
-    rhowall = losdens['valwall']
-    nz = len(rhowall)
-    nzs = nz - 1
+    nzs =len(rhocell)
+    nz = nzs + 1
     zlos = losdens['zlos'] # cell
     zlosi = losdens['zlosi'] # wall
-    dzlos = zlosi[:-1] - zlosi[1:]
-    dtaustg =  - kap * rhocell * dzlos
-    tau = np.zeros(nz, dtype=np.float64)
-    for iz in range(nzs):
-        jj = nzs-1-iz
-        tau[jj] = sum(dtaustg[jj:])
-    taustg = 0.5*(tau[1:] + tau[:-1])
+
+    tau, dtaustg, taustg = getTauz(zlosi, zlos, rhocell, kap)
+
+
+#    dzlos = zlosi[1:] - zlosi[:-1] # zlos is in the same direction as tau
+#    dtaustg = kap * rhocell * dzlos
+
+#    tau = np.zeros(nz, dtype=np.float64)
+#    for iz in range(nzs):
+#        tau[iz+1] = sum(dtaustg[:iz+1])
+
+#    taustg = 0.5*(tau[1:] + tau[:-1])
 
     return tau, dtaustg, taustg
 
-def getdTdTau(tau, dtaustg, lostemp, tauval=None, tauvalthres=None):
+def getdTdTau(tau, dtaustg, lostemp, tauval=None, tauvalthres=None, dolnT=False):
     """
-    lostemp = losout package with temperature
-    dtaustg = dtau calculated by getTauLos
+    Parameters
+    ----------
+    tau		: ndarray
+        the optical depth axis calculated by getTauLos
+
+    dtaustg	: ndarray
+        dtau calculated by getTauLos
+
+    lostemp 	: losout package
+        losout package for temperature
+
+    tauval	: float
+        the optical depth value where we want the dTdTau. if not given, the full profile will be given 
+
+    tauvalthres	: float
+        the threshold maximum optical depth. if actual tau is less than this threshold, dTdTau will be zero. 
+    
     """
     T0thres = 3.
     dtauthres = 1e-3
@@ -169,26 +264,31 @@ def getdTdTau(tau, dtaustg, lostemp, tauval=None, tauvalthres=None):
     # take out any values that has temperature less than 3
     flagreg = lostemp['valcell'] < T0thres
 
-    dT = temp[1:] - temp[:-1]
-    taustg = 0.5*(tau[:-1] + tau[1:])
+    if dolnT:
+        dT = np.log(temp[1:] / temp[:-1])
+    else:
+        dT = temp[1:] - temp[:-1]
+    taustg = 0.5*(tau[1:] + tau[:-1])
     T0 = lostemp['valcell']
+    dTdTau = dT / dtaustg
+
     if tauval is None:
-        dTdTau = dT / dtaustg
-        reg = abs(dtaustg) < dtauthres
-        dTdTau[reg] = 0.
-        dTdTau[flagreg] = 0.
+#        reg = abs(dtaustg) < dtauthres
+#        dTdTau[reg] = 0.
+#        dTdTau[flagreg] = 0.
         T0 = T0
     else:
         if tauvalthres is None: 
             tauvalthres = tauval
         if max(tau) > (tauvalthres):
             fdTau = sip.interp1d(taustg, dtaustg)
-            fdT = sip.interp1d(taustg, dT)
+            fdTdTau = sip.interp1d(taustg, dTdTau)
             fT0 = sip.interp1d(taustg, T0)
             if (fdTau(tauval) < dtauthres) or (fT0(tauval) < T0thres):
                 dTdTau = 0.
             else:
-                dTdTau = fdT(tauval) / fdTau(tauval)
+#                dTdTau = fdT(tauval) / fdTau(tauval)
+                dTdTau = fdTdTau(tauval)
             T0 = fT0(tauval)
         else:
             dTdTau = 0.0 

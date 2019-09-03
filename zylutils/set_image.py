@@ -58,7 +58,7 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
             image.makeImage(npix=npix, loadlambda=1, incl=inc[ii], phi=phi, 
                 sizeau=sizeau, stokes=True, secondorder=1,nostar=True, 
                 posang=posang, 
-                nphot_scat=1000,# hard set nphot_scat, any low value is enough
+                nphot_scat=1e3,# hard set nphot_scat, any low value is enough
                 fname=fname,tracetau=True)
 
         if (dotausurf or dooptdepth):

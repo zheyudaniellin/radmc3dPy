@@ -304,7 +304,8 @@ class radmc3dData(object):
                     # uses Fortran-order
                     data = np.swapaxes(data, 0, 3)
                     data = np.swapaxes(data, 1, 2)
-            else:
+
+            else: # if not binary
                 if ndim == 3:
                     hdr = np.fromfile(rfile, count=3, sep=" ", dtype=np.int64)
                 else:
@@ -1447,7 +1448,7 @@ class radmc3dData(object):
                                 wfile.write("%.9e %.9e %.9e\n" % (self.gasvel[ix, iy, iz, 0], self.gasvel[ix, iy, iz, 1],
                                                                self.gasvel[ix, iy, iz, 2]))
 
-    def writeDustAlign(self, fname='', binary=True, octree=False, fdir=None):
+    def writeDustAlign(self, fname='', binary=False, octree=False, fdir=None):
         """Writes the dust alignment.
 
         Parameters

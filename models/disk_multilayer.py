@@ -76,9 +76,9 @@ def getDefaultParams():
         ['nz', '[361]', 'Number of grid points in the third dimension'],
         ['zbound', '[0., 2.0*pi]', 'Number of radial grid points'],
         # star related
-        ['tstar', '[3900.0]', 'Temperature of star'],
+        ['tstar', '[4000.0]', 'Temperature of star'],
         ['mstar', '[1.0*ms]', 'Mass of the star(s)'],
-        ['rstar', '[2.5*rs]', 'Radius of star'],
+        ['rstar', '[2*rs]', 'Radius of star'],
         # gas density related
         ['mdisk', '0.17*ms', 'Total mass of disk'],
         ['g2d', '0.01', 'gas to dust ratio'],
@@ -118,7 +118,7 @@ def getDefaultParams():
         ['dring_f', '[0]', 'ring fraction of surface density. 0 for no ring'], 
         # envelope
         ['envmode', '0', '0:Ulrich. 1: oblate sphere'], 
-        ['dMenv', '5e-6', 'envelope accretion rate onto disk [Msun/year]'],
+        ['dMenv', '0', 'envelope accretion rate onto disk [Msun/year]'],
         ['rhoRc', '5e-16', 'Density at Rc. This is used if dMenv is < 0'],
         ['Rc', '50*au', 'Radius where infall velocity equals rotation velocity'], 
         ['envq_1', '-1.5', 'envelope radial exponent'], 

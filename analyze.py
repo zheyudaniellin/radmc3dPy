@@ -34,6 +34,7 @@ except ImportError:
 from matplotlib.colors import LogNorm
 import matplotlib.patches as patches
 import matplotlib.lines as ml
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from scipy import interpolate
 
@@ -1316,7 +1317,7 @@ def interpolateOctree(data=None, x=None, y=None, z=None, var=None, nproc=1):
 def plotSlice2D(data=None, var='ddens', plane='xy', crd3=0.0, icrd3=None, ispec=-1, xlim=(), ylim=(), log=False,
                 linunit='cm', angunit='rad',
                 nx=100, ny=100, showgrid=False, gridcolor='k', gridalpha=1.0, nproc=1,
-                contours=False,coverplot=False,clev=None, clmin=None, clmax=None, ncl=None, cllog=False, clcol='k',
+                contours=False,coverplot=False,clev=None, clmin=None, clmax=None, ncl=None, cllog=False, clcol='k', nocolorbar=False, 
                 cllabel=False, cllabel_fontsize=10, cllabel_fmt="%.1f", clalpha=1.0, ax=None, lattitude=True,
                 Sph2Cart=False, xCart=None, zCart=None, mirror=False, Cart2Sph=False,
                 **kwargs):
@@ -2010,8 +2011,13 @@ def plotSlice2D(data=None, var='ddens', plane='xy', crd3=0.0, icrd3=None, ispec=
         #
         # Generate the colorbar
         #
-        cb = plt.colorbar(p)
-        cb.set_label(cblabel)
+        if nocolorbar is True:
+            cbar = None
+        else:
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            cbar = plt.colorbar(p, cax=cax)
+            cbar.set_label(cblabel)
 
     if contours or coverplot:
         if clmin is None:
@@ -2170,15 +2176,15 @@ def plotSlice2D(data=None, var='ddens', plane='xy', crd3=0.0, icrd3=None, ispec=
         if len(ylim) == 0:
             ylim = (plot_y[0], plot_y[-1])
 
-    plt.xlim(xlim[0], xlim[1])
-    plt.ylim(ylim[0], ylim[1])
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0], ylim[1])
     #
     # Set the axis labels
     #
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
-    return {'plot_x':plot_x, 'plot_y':plot_y, 'pdata':pdata, 'ax':ax}
+    return {'plot_x':plot_x, 'plot_y':plot_y, 'pdata':pdata,'pc':p, 'ax':ax}
 
 def plotDustOpac(opac=None, var='kabs', idust=0, beck=-1, ax=None, xlabel=None, ylabel=None, 
         fmt='', wavcut=None, **kwargs):

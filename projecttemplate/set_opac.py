@@ -48,5 +48,6 @@ for idust in range(len(ext)):
     op.readOpac(ext=ext[idust], scatmat=masteropac['scatmat'][idust])
 
 if ppar['alignment_mode'] is 1:
-    op.makeDustAlignFact(ppar=ppar, wav=wav)
+    for idust in range(len(ext)):
+        op.makeDustAlignFact(ppar=ppar, wav=op.wav[idust])
 

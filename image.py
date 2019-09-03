@@ -1934,7 +1934,6 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
         width=quivwidth, 
         headwidth=1e-10, headlength=1e-10, headaxislength=1e-10)
 
-
     # set up the text 
     if textxy is None:
         textx = 0.75 * xr.max()
@@ -2313,6 +2312,19 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 # Convert data to Jy/beam
                 data *= beam_area / pixel_area
                 cb_label = 'S' + r'$_\nu$' + ' [Jy/beam]'
+        elif bunit.lower() == 'mjy/beam':
+            if len(image.fwhm) == 0:
+                msg = 'The image does not appear to be convolved with a Gaussain (fwhm data attribute is empty). ' \
+                      'The intensity unit can only be converted to Jy/beam if the convolving beam size is known'
+                raise ValueError(msg)
+            beam_area = (image.fwhm[ifreq][0]/3600.0*np.pi/180.) * (image.fwhm[ifreq][1]/3600.*np.pi/180.) * np.pi / 4. / np.log(2.0)
+            if log:
+                # convert to mJy/beam
+                data += np.log10(beam_area * 1e3 * 1e23)
+                cb_label = 'log(S' + r'$_\nu$' + '[mJy/beam])'
+            else:
+                data *= beam_area * 1e3 * 1e23
+                cb_label = 'S' + r'$_\nu$' + ' [mJy/beam]'
         elif bunit.lower() == 'tb':
             if dpc is None:
                 msg = 'Unknown dpc. If tb is selected for the image unit the dpc keyword should also be set'

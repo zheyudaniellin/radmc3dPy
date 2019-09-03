@@ -1222,7 +1222,8 @@ class radmc3dDustOpac(object):
 
         ppar        : dictionary
                       Parameters of the simulations. 
-                      Needs 'kpara0'
+                      - 'kpara0': magnitude of intrinsic polarization level. no default
+                      - 'gshape' : 'oblate' or 'prolate'. Default: 'oblate'
 
         wav         : ndarray, optional
                       Wavelength grid on which the alignment factor should be calculated
@@ -1259,6 +1260,11 @@ class radmc3dDustOpac(object):
         else:
             raise ValueError('Unknown kpara0 in ppar')
 
+        # grain shape
+        if 'gshape' in ppar:
+            gshape = ppar['gshape']
+        else:
+            gshape = 'oblate'
 
         for idust in range(len(ext)):
             muang = np.cos(theta * np.pi / 180.)
@@ -1267,9 +1273,15 @@ class radmc3dDustOpac(object):
             for inu in range(nwav):
                 # simple model
 #                kpara[inu,:]  = ( 1.e0 - ppar['kpara0']*np.cos(muang*np.pi) ) / ( 1.e0 + ppar['kpara0'])
-                # Lee & Draine 1985
-                kpara[inu,:] = (1. + ppar['kpara0']*np.cos(2.*theta*np.pi/180.)) / (1. + ppar['kpara0'])
-                korth[inu,:] = 1.0
+                # Lee & Draine 1985. Yang 2019
+                if gshape == 'oblate':
+                    kpara[inu,:] = (1. + abs(kpara0) * np.cos(2.*theta*np.pi/180.)) / (1.+ abs(kpara0))
+                    korth[inu,:] = 1.0
+                elif gshape == 'prolate':
+                    kpara[inu,:] = (1. - abs(kpara0) * np.cos(2*theta*np.pi/180)) / (1. - abs(kpara0))
+                    korth[inu,:] = 1.
+                else:
+                    raise ValueError('gshape not implemented: %s'%gshape)
             self.kpara.append(kpara)
             self.korth.append(korth)
             self.alignang.append(theta)

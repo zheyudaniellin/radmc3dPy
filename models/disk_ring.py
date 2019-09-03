@@ -109,6 +109,11 @@ def getDefaultParams():
         ['dRout_w', '[1*au, 1*au]', 'gaussian taper after outer edge'], 
         ['dsigp', '[-1.0, -1.5]', 'power-law surface density'],
         ['dsig0', '[1e2, 1e1]', 'surface density at Rin'],
+        # Lynden-Bell parts
+        ['dLB_Rin', '[0.1*au]', 'inner bounding radius'], 
+        ['dLB_Rsig', '[30*au]', 'charcteristic radius'],
+        ['dLB_sigp', '[-1.0]', 'power-law exponent. Careful, the sign is different from the usual function by a negative sign for consistency with flat power-law'], 
+        ['dLB_sig0', '[1e2]', 'surface density'], 
         # ring parts
         ['dring_r', '[50*au]', 'location of gaussian ring'],
         ['dring_win', '[5*au]', 'width of gaussian ring in inner radius'],
@@ -265,13 +270,20 @@ def fn_getflat(cyrr, Rin_w, Rin, Rout, Rout_w, sigp, sig0):
 
     if Rin_w != 0:
         reg = cyrr < Rin
-        flat[reg] = sig0 * np.exp(-((cyrr[reg] - Rin) / Rin_w)**2)
+        flat[reg] = sig0 * np.exp(-0.5 * ((cyrr[reg] - Rin) / Rin_w)**2)
 
     if Rout_w != 0:
         reg = cyrr > Rout
-        flat[reg] = sig0 * (Rout / Rin)**(sigp) * np.exp(-((cyrr[reg] - Rout) / Rout_w)**2)
+        flat[reg] = sig0 * (Rout / Rin)**(sigp) * np.exp(-0.5*((cyrr[reg] - Rout) / Rout_w)**2)
 
     return flat
+
+def fn_getLyndenBell(cyrr, Rin, Rsig, sigp, sig0):
+    lynbell = cyrr * 0
+    lynbell = sig0 * (cyrr / Rsig)**(sigp) * np.exp(-(cyrr / Rsig)**(2.+sigp)) * (1.-(Rin / cyrr)**0.5)
+    reg = lynbell < 0
+    lynbell[reg] = 0.
+    return lynbell
 
 def getGasDensity(grid=None, ppar=None):
     """Calculates the total gas density distribution 
@@ -385,7 +397,15 @@ def getDustDensity(grid=None, ppar=None):
             ppar['dring_a'][ii])
         ring = ring + ringii
 
-    sig = flat + ring
+    nlynbell = len(ppar['dLB_Rin'])
+    lynbell = cyrr * 0
+    for ii in range(nlynbell):
+        lynbellii = fn_getLyndenBell(cyrr, ppar['dLB_Rin'][ii], 
+            ppar['dLB_Rsig'][ii], ppar['dLB_sigp'][ii], 
+            ppar['dLB_sig0'][ii])
+        lynbell = lynbell + lynbellii
+
+    sig = flat + ring + lynbell
 
     # calculate the dust density
     op = dustopac.radmc3dDustOpac()
