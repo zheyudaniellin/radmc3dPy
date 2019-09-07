@@ -1202,7 +1202,7 @@ class radmc3dData(object):
                         for iy in range(ntheta):
                             wfile.write("%.7e\n" % self.rhodust[ix, iy, 0, idust])
 
-    def writeDustTemp(self, fname='', binary=True, octree=False, fdir=None):
+    def writeDustTemp(self, fname='', binary=False, octree=False, fdir=None):
         """Writes the dust density.
 
         Parameters

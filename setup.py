@@ -1490,6 +1490,33 @@ def writeRadmc3dInp(modpar=None, fdir=None):
             else:
                 wfile.write('%s %d\n' % (key + ' =', ppar[key]))
 
+def modifyRadmc3dInp(modpar, fdir=None):
+    """ reads radmc3d.inp and modifies the file, and updates
+    if a key in modpar was not present, then will write the new argument
+
+    Parameter
+    ---------
+    modpar  : dictionary
+        the key and values for modifying the file. for convenience, the values should be in string
+    """
+    fname = 'radmc3d.inp'
+    if fdir is not None:
+        fname = os.path.join(fdir, fname)
+
+    with open(fname, 'r') as rfile:
+        fdata = rfile.readlines()
+
+    for ikey in modpar.keys():
+        for ii, iline in enumerate(fdata):
+            ival = modpar[ikey]
+            if ikey in iline:
+                fdata[ii] = '%s = %s\n' % (ikey, ival)
+    pdb.set_trace()
+
+not done yet!
+
+    with open(fname, 'w') as wfile:
+        wfile.writelines(fdata)
 
 def writeLinesInp(ppar=None):
     """Writes the lines.inp master command file for line simulation in RADMC-3D

@@ -1168,7 +1168,7 @@ class radmc3dDustOpac(object):
 
             self.ksca_from_z11[ig] = self.ksca_from_z11[ig] * alb / albig
 
-    def writeDustAlignFact(self, fname=None, ext=None, idust=None):
+    def writeDustAlignFact(self, fname=None, ext=None, idust=None, fdir=None):
         """
         Writes dust alignment factor into file
 
@@ -1196,6 +1196,9 @@ class radmc3dDustOpac(object):
                     raise ValueError(msg)
                 else:
                     fname = 'dustkapalignfact_' + ext + '.inp'
+
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
 
         print('writing '+fname)
         with open(fname, 'w') as wfile:
