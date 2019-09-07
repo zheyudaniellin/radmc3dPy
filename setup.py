@@ -1516,7 +1516,7 @@ def modifyRadmc3dInp(modpar, fdir=None):
             ival = modpar[ikey]
             if ikey in iline:
                 fdata[ii] = '%s = %s\n' % (ikey, ival)
-                keyinfle = True
+                keyinfile = True
                 break
 
         if keyinfile is False:
