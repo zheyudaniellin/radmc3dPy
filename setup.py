@@ -1506,15 +1506,27 @@ def modifyRadmc3dInp(modpar, fdir=None):
     with open(fname, 'r') as rfile:
         fdata = rfile.readlines()
 
+    # store keys that are not in the file
+    nodatakey = []
+
     for ikey in modpar.keys():
+        keyinfile = False
+
         for ii, iline in enumerate(fdata):
             ival = modpar[ikey]
             if ikey in iline:
                 fdata[ii] = '%s = %s\n' % (ikey, ival)
-    pdb.set_trace()
+                keyinfle = True
+                break
 
-not done yet!
+        if keyinfile is False:
+            nodatakey.append(ikey)
 
+    # modify the file to include keys that were previously not in the file
+    for ikey in nodatakey:
+        fdata.append('%s = %s\n'%(ikey, modpar[ikey]))
+
+    # now write to file
     with open(fname, 'w') as wfile:
         wfile.writelines(fdata)
 

@@ -38,9 +38,11 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
             if original_align:
                 op.writeMasterOpac(ext=mopac['ext'], therm=mopac['therm'], 
                     scattering_mode_max=5, alignment_mode=0)
-                par = analyze.readParams()
-                par.ppar['alignment_mode'] = 0
-                setup.writeRadmc3dInp(modpar=par)
+                # change radmc3d.inp
+                setup.modifyRadmc3dInp({'alignment_mode':'0'})
+#                par = analyze.readParams()
+#                par.ppar['alignment_mode'] = 0
+#                setup.writeRadmc3dInp(modpar=par)
 
         if dotausurf:
             fname = 'mytausurf1.i%d.out'%(inc[ii])
@@ -66,9 +68,10 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
                 # redo the settings
                 op.writeMasterOpac(ext=mopac['ext'],therm=mopac['therm'],
                     scattering_mode_max=5, alignment_mode=1)
-                par = analyze.readParams()
-                par.ppar['alignment_mode'] = 1
-                setup.writeRadmc3dInp(modpar=par)
+                setup.modifyRadmc3dInp({'alignment_mode':'1'})
+#                par = analyze.readParams()
+#                par.ppar['alignment_mode'] = 1
+#                setup.writeRadmc3dInp(modpar=par)
 
     # change the 'camera_wavelength_micron.inp' to wavfname
     if wavfname is not None:
