@@ -1,7 +1,10 @@
 # for calculating line-of-sight properties
 import numpy as np
 import scipy.interpolate as sip
-from scipy.interpolate import RegularGridInterpolator
+try:
+    from scipy.interpolate import RegularGridInterpolator
+except:
+    print('RegularGridInterpolator scipy package import failed. los.extract3d() will not work.')
 import pdb
 from radmc3dPy import natconst, crd_trans
 
