@@ -1,5 +1,5 @@
 # create image
-from radmc3dPy import *
+from radmc3dPy import image, dustopac, setup
 import time
 import fntools
 import numpy as np
