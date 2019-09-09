@@ -1349,7 +1349,7 @@ class radmc3dData(object):
             self._scalarfieldWriter(data=self.qvis, fname=fname, binary=binary, octree=False)
 
 
-    def writeGasVel(self, fname='', binary=True, octree=False, fdir=None):
+    def writeGasVel(self, fname='', binary=False, octree=False, fdir=None):
         """Writes the gas velocity.
 
         Parameters
@@ -1402,10 +1402,7 @@ class radmc3dData(object):
             if fname == '':
                 fname = 'gas_velocity.inp'
                 if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
+                    fname = os.path.join(fdir, fname)
 
             print('Writing ' + fname)
 
