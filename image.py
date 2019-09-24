@@ -1782,6 +1782,25 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, recen=None, padnan
 
     return res
 
+def calcPolAng(Q, U):
+    """ function to calculate polarization angle
+    Parameters 
+    ----------
+    Q : ndarray
+    U : ndarray
+
+    Returns
+    -------
+    ang : ndarray
+        the polarization angle in radians and in between 0, 2pi
+    """
+    ang = np.arctan2(U, Q) / 2.
+    reg = ang < 0.
+    ang[reg] = ang[reg] + 2*np.pi
+    reg = ang > np.pi
+    ang[reg] = ang[reg] - np.pi
+    return ang
+
 def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=None, color='w', nx=20, ny=20, 
     turn90=False, polunitlen=-1, quivwidth=0.005, textcolor='k', textxy=None, ax=None):
     """
@@ -1887,14 +1906,16 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
     # fraction of linear polarization = sqrt(Q^2 + U^2) / I
     lpol = np.sqrt(qqr**2 + uur**2).clip(1e-60) 
 
-    qqr /= lpol
-    uur /= lpol
+    qqr /= lpol # Q / sqrt(Q**2 + U**2)
+    uur /= lpol # U / sqrt(Q**2 + U**2)
     
     # determine angles
-    ang = np.arccos(qqr) / 2.0
-    ii = (uur < 0)
-    if True in ii:
-        ang[ii] = np.pi - ang[ii]
+#    ang = np.arccos(qqr) / 2.0
+#    ii = (uur < 0)
+#    if True in ii:
+#        ang[ii] = np.pi - ang[ii]
+    ang = calcPolAng(qqr, uur)
+
     if turn90:
         ang = ang + np.pi/2.0
 
@@ -1989,7 +2010,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                     If given a number, then means the peak value, higher pixel values will be clipped
                     If given like '##percent', where ## is a number, then it is in percent of highest pixel value
 
-    bunit         : {'norm', 'inu', 'snu', 'jy/beam', 'jy/pixel', 'tb', 'percent', 'optdepth', 'surface'}
+    bunit         : {'norm', 'inu', 'snu', 'jy/beam', 'jy/pixel', 'tb', 'percent', 'optdepth', 'surface', 'deg'}
                     Unit of the image, ('norm' - Inu/max(Inu), 'inu' - Inu, 'snu' - Jy/pixel, 'jy/pixel' - Jy/pixel,
                     'jy/beam' - Jy/beam), default is 'norm'. The 'snu' keyword value is kept for backward compatibility
                     as it is fully equivalent with the 'jy/pixel' keyword value.
@@ -1997,6 +2018,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                     added 'percent' - use this only for stoke='P' or 'PL' to present data in percentage
                     added 'optdepth' - use this only for plotting optical depth images
                     added 'surface' - use for plotting tau surface. units will be same as the x,y axis
+                    added 'deg' - for polarization angle
 
     recenter      : 2 element array 
                     center coordinate relative to original coordinates, to plot as (0,0). In units of AU
@@ -2020,12 +2042,13 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
 
     cmap          : matplotlib color map
 
-    stokes        : {'I', 'Q', 'U', 'V', 'PI', 'P', 'PIL', 'PL'}
+    stokes        : {'I', 'Q', 'U', 'V', 'PI', 'P', 'PIL', 'PL', 'ANG'}
                    What to plot for full stokes images, Stokes I/Q/U/V,
                    PI  - polarised intensity (PI = sqrt(Q^2 + U^2 + V^2))
                    P   - polarisation fraction (i.e. sqrt(Q^2 + U^2 + V^2) / I)
                    PIL - linear polarised intensity (PI = sqrt(Q^2 + U^2))
                    PL  - fraction of linear polarisation (i.e. sqrt(Q^2 + U^2) / I)
+                   ANG - polarization angle ( ang=arctan2(U, Q) / 2 )
 
     oplotbeam     : str, optional
                     Input a string for its color, then will overplot an ellipse for the fwhm of psf
@@ -2160,6 +2183,13 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                      
                 dototflux = 0
                 title_stokes = 'Linear Polarization Fraction'
+            if stokes.strip().upper() == 'ANG':
+                if dum_image.nwav == 1:
+                    dum_image.image = calcPolAng(image.image[:,:,1], image.image[:,:,2])
+                else:
+                    dum_image.image = calcPolAng(image.image[:,:,1,:], image.image[:,:,2,:])
+                dototflux = 0
+                title_stokes = 'Polarization Angle'
         else:
             if dum_image.nwav == 1:
                 dum_image.image = image.image[:, :, :]
@@ -2392,6 +2422,9 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 cb_label = 'Distance '+cb_label_unit
             dototflux = 0
             title_bunit = 'Tau Surface'
+        elif bunit.lower() == 'deg':
+            data = data / nc.rad
+            cb_label = r'Degrees [$^{\circ}$]'
         else:
             msg = 'Unknown bunit: ' + bunit + ' Allowed values are "norm", "inu", "snu", "tb", "percent", "surface", "optdepth"'
             raise ValueError(msg)
