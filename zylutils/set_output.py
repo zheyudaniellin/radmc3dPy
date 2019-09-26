@@ -14,6 +14,9 @@ import pdb
 import fntools
 import copy
 
+from matplotlib.patches import Ellipse
+
+
 def getIm2Tb(im, wav):
     ld2 = (wav*1e-4)**2.
     hmu = natconst.hh * natconst.cc / wav / 1e-4
@@ -67,7 +70,8 @@ def getOptPolEm(opdepth, kpara90, korth90):
 #    pol = abs(pol) #don't care about the signs just yet
     return pol
 
-def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname, polmax=None, imTblim=None, xlim=None, ylim=None):
+def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname, 
+        polmax=None, imTblim=None, xlim=None, ylim=None, opltr=None, inc=None):
     """ calculates image
     xlim : tuple
     ylim : tuple
@@ -96,18 +100,18 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     ncol = np.ceil(nsub / nrow)
     nrow, ncol = int(nrow), int(ncol)
 
-    fig = plt.figure(num=ifreq, figsize=(4*ncol, 3*nrow))
+    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, figsize=(4*ncol, 3*nrow), 
+        sharex=True, sharey=True, squeeze=False)
+    axes = axgrid.flatten()
 
-    axes = []
     isubplot = 0
+
     # image
     if imTblim is not None:
         imTbvmin, imTbvmax = imTblim[0], imTblim[1]
     else:
         imTbvmin, imTbvmax = 0, None
-    isubplot = isubplot + 1
-    ax = fig.add_subplot(nrow, ncol, isubplot)
-    axes.append(ax)
+    ax = axes[isubplot]
     image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
         arcsec=False, au=True, dpc=dis, oplotbeam='w', 
         stokes='I', bunit='Tb',ifreq=ifreq, saturate='90percent', 
@@ -116,45 +120,44 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     if im.stokes is True:
         image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='w',
             nx=16, ny=16, polunitlen=polunitlen, ifreq=ifreq, ax=ax)
+    isubplot = isubplot + 1
+
     #
     # polarized intensity
     if dostokes:
-        isubplot = isubplot + 1
-        ax = fig.add_subplot(nrow,ncol,isubplot)
-        axes.append(ax)
+        #ax = fig.add_subplot(nrow,ncol,isubplot)
+        ax = axes[isubplot]
         image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
             arcsec=False, au=True, dpc=dis, oplotbeam='w',
             stokes='PI', bunit='Tb',ifreq=ifreq, saturate='90percent',
             clevs=[0, 1.0, 10., 100., 200., 500.], clcol='w', 
             ax=ax)
+        isubplot = isubplot + 1
 
     # polarized degree
     if dostokes:
-        isubplot = isubplot + 1
-        ax = fig.add_subplot(nrow,ncol,isubplot)
-        axes.append(ax)
+        #ax = fig.add_subplot(nrow,ncol,isubplot)
+        ax = axes[isubplot]
         image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear', 
             arcsec=False, au=True, dpc=dis, ifreq=ifreq,
             saturate='100percent', stokes='P',bunit='percent' , vmin=0, vmax=polmax,
             clevs=[1., 5.0, 10., 20.], clcol='k', ax=ax)
+        isubplot = isubplot + 1
 
     # optical depth
     if optim is not None:
-        isubplot = isubplot + 1
-        ax = fig.add_subplot(nrow,ncol,isubplot)
-        axes.append(ax)
+        ax = axes[isubplot]
         kext = fkabs(im.wav[ifreq]) + fksca(im.wav[ifreq])
         image.plotImage(image=optim, cmap=plt.cm.jet, interpolation='bilinear',
             arcsec=False, au=True, dpc=dis, ifreq=ifreq,
             saturate='100percent', stokes='I', bunit='optdepth',
             clevs=[0.1,1.,5., 10.,100.], clcol='w', ax=ax
             )
+        isubplot = isubplot + 1
  
     # tau image
     if tauim is not None:
-        isubplot = isubplot + 1
-        ax = fig.add_subplot(nrow,ncol,isubplot)
-        axes.append(ax)
+        ax = axes[isubplot]
         reg = tauim.image[:,tauim.ny/2,0,ifreq] > tauim.image.min()
         if True in reg:
             xmax = tauim.x[reg].max()/natconst.au
@@ -178,12 +181,11 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
             nx=nx, ny=ny, polunitlen=polunitlen, ifreq=ifreq, ax=ax)
         ax.set_xlim(-xmax, xmax)
         ax.set_ylim(-xmax, xmax)
+        isubplot = isubplot + 1
 
     # only polarized vectors that varies with polarized fraction, no image
     if dostokes:
-        isubplot = isubplot + 1
-        ax = fig.add_subplot(nrow,ncol,isubplot)
-        axes.append(ax)
+        ax = axes[isubplot]
         image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='k',
             nx=16, ny=16, polunitlen=-1, ifreq=ifreq, ax=ax)
         ax.set_title('Polarization E Vectors')
@@ -199,6 +201,14 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     # set aspect radtio
     for ii in range(len(axes)):
         axes[ii].set_aspect('equal')
+
+    # over plot ellipses
+    if (opltr is not None) and (inc is not None):
+        for axii in axes:
+            for ir in opltr:
+                ells = Ellipse(xy=(0,0), width=2*ir, height=np.cos(inc*natconst.rad)*2*ir, angle=0,
+                    fill=False, color='k', linestyle='-', linewidth=1)
+                axii.axes.add_patch(ells)
 
     fig.tight_layout()
     fig.savefig(pngname)
@@ -600,45 +610,71 @@ def getOutput_op(op, mopac, dinfo, pngname, pltopwav=None):
     fig.savefig(pngname)
     plt.close()
 
-def getOutput_beta(ifreq, im,op, pngname):
+def getOutput_alpha(im, op, pngname, opltr=None, inc=None):
     """
-    calculate beta index
+    calculate alpha index
     ifreq = index for wavelength/frequency. should always be greater than 0. 
         the frequency decrease in increasing index
     """
     if im.nfreq == 1:
-        raise ValueError('image should be multiwavelength for beta index calculations')
-    dum_image = copy.deepcopy(im)
-    dalognu = np.log(dum_image.freq[ifreq-1]) - np.log(dum_image.freq[ifreq])
-    if dum_image.stokes:
-        dalogI = np.log(dum_image.image[:,:,0,ifreq-1]) - np.log(dum_image.image[:,:,0,ifreq])
-    else:
-        dalogI = np.log(dum_image.image[:,:,ifreq-1]) - np.log(dum_image.image[:,:,ifreq])
+        raise ValueError('image should be multiwavelength for alpha index calculations')
 
-    beta = dalogI / dalognu - 2.
+    alpha = np.zeros([im.nx, im.nx, im.nfreq-1], dtype=np.float64)
+
+    for ifreq in range(im.nfreq-1):
+        dalognu = np.log(im.freq[ifreq+1]) - np.log(im.freq[ifreq])
+
+        if im.stokes:
+            dalogI = np.log(im.image[:,:,0,ifreq+1]) - np.log(im.image[:,:,0,ifreq])
+        else:
+            dalogI = np.log(im.image[:,:,ifreq+1]) - np.log(im.image[:,:,ifreq])
+
+        alpha[:,:,ifreq] = dalogI / dalognu 
 
     # opacity index
     dinfo = op.readDustInfo()
     ngs = len(dinfo['gsize'])
 
-    fig = plt.figure(0, figsize=(8, 5))
-    ax = fig.add_subplot(111)
-    pc = ax.pcolormesh(dum_image.x/natconst.au, dum_image.y/natconst.au, 
-        beta.T)
-    cbar = plt.colorbar(pc)
-    ax.set_xlabel('X [AU]')
-    ax.set_ylabel('Y [AU]')
-    ax.set_title('Beta Index: %d - %d GHz'%(dum_image.freq[ifreq-1]/1e9, dum_image.freq[ifreq]/1e9))
-    ax.set_aspect('equal')
+    # plotting
+    if im.nfreq > 2:
+        nrow = np.floor(np.sqrt(im.nfreq-1))
+        ncol = np.ceil((im.nfreq-1) / nrow)
+        nrow, ncol = int(nrow), int(ncol)
+    else:
+        nrow, ncol = 1, 1
 
-#    ax = fig.add_subplot(122)
-    xlim, ylim = ax.get_xlim(), ax.get_ylim()
-    for ig in range(ngs):
-        fext = interpolate.interp1d(op.wav[ig], op.kabs[ig]+op.ksca[ig])
-        dlogkap = np.log(fext(dum_image.wav[ifreq-1])) - np.log(fext(dum_image.wav[ifreq]))
-        opbeta = dlogkap / dalognu
-        ax.text(xlim[1], ylim[0]*ig/float(ngs), ('a=%.1f, beta=%.1f'%(dinfo['gsize'][ig],opbeta)), 
-            va='bottom', ha='right', color='w')
+    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, squeeze=False, 
+        sharex=True, sharey=True, figsize=(ncol*4, nrow*3))
+    axes = axgrid.flatten()
+
+    for ifreq in range(im.nfreq-1):
+        ax = axes[ifreq]
+
+        pc = ax.pcolormesh(im.x/natconst.au, im.y/natconst.au, 
+            alpha[:,:,ifreq].T, cmap=plt.cm.jet)
+        cbar = plt.colorbar(pc, ax=ax)
+
+        ax.set_xlabel('X [AU]')
+        ax.set_ylabel('Y [AU]')
+        ax.set_title(r'$\alpha$ Index: %d - %d GHz'%(im.freq[ifreq+1]/1e9, im.freq[ifreq]/1e9))
+        ax.set_aspect('equal')
+
+    #xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    #for ig in range(ngs):
+    #    fext = interpolate.interp1d(op.wav[ig], op.kabs[ig]+op.ksca[ig])
+    #    dlogkap = np.log(fext(dum_image.wav[ifreq-1])) - np.log(fext(dum_image.wav[ifreq]))
+    #    opbeta = dlogkap / dalognu
+    #    ax.text(xlim[1], ylim[0]*ig/float(ngs), ('a=%.1f, beta=%.1f'%(dinfo['gsize'][ig],opbeta)), 
+    #        va='bottom', ha='right', color='w')
+
+    if (opltr is not None) and (inc is not None):
+        for axii in axes:
+            for ir in opltr:
+                ells = Ellipse(xy=(0,0), width=2*ir, height=np.cos(inc*natconst.rad)*2*ir, angle=0,
+                    fill=False, color='k', linestyle=':', linewidth=1)
+                axii.axes.add_patch(ells)
+
+    fig.tight_layout()
     fig.savefig(pngname)
     plt.close()
 
@@ -664,9 +700,23 @@ def getOutput_compreal():
     """ compares the real images to calculated images
     """
 
-def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None):
+def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, opltr=None, inc=None, 
+        anglim=None, angcmap='hsv'):
     """
-    plots all the images across wavelength
+    plots all the images across wavelength: stokes I, polarization fraction, angles
+    Parameters
+    ----------
+    im : radmc3dImage
+    dis : float
+        distance in pc
+    pngname : str
+        name for png file output
+    opltr : list of floats
+        radius to overplot in au
+    inc : float
+        inclination in degrees
+    angcmap : str
+        name of colormap to use for angle plot. Default is 'hsv'
 
     """
     if imTblim is None:
@@ -679,18 +729,73 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None):
         imylim = (im.y.min()/natconst.au, im.y.max()/natconst.au)
 
     nwav = len(im.wav)
-    nrow = np.floor(np.sqrt(nwav))
-    ncol = np.ceil(nwav / nrow)
-    nrow, ncol = int(nrow), int(ncol)
-    fig = plt.figure(figsize=(ncol*4, nrow*3))
+    if im.stokes:
+        nrow = nwav
+        ncol = 4
+    else:
+        nrow = np.floor(np.sqrt(nwav))
+        ncol = np.ceil(nwav / nrow)
+        nrow, ncol = int(nrow), int(ncol)
+
+    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*3.5, nrow*3), 
+        squeeze=False, sharex=True, sharey=True)
+    axes = axgrid.flatten()
+
     for ii in range(nwav):
-        axii = fig.add_subplot(nrow,ncol, ii+1)
+        # stokes I
+        if im.stokes:
+            axii = axgrid[ii, 0]
+        else:
+            axii = axes[ii+1]
         dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet, 
             stokes='I', bunit='Tb', dpc=dis, vmin=vlim[0], vmax=vlim[1], 
             ifreq=ii, clevs=[20,40,60,80, 100], clcol='k',  
             oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
         axii.set_xlim(imxlim)
         axii.set_ylim(imylim)
+
+        # polarized intensity
+        if im.stokes:
+            axii = axgrid[ii,1]
+            dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet,
+                stokes='PI', bunit='Tb', dpc=dis,
+                ifreq=ii,
+                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
+            axii.set_xlim(imxlim)
+            axii.set_ylim(imylim)
+
+        # polarization fraction 
+        if im.stokes:
+            axii = axgrid[ii,2]
+            dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet, 
+                stokes='P', bunit='percent', dpc=dis,
+                ifreq=ii,
+                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
+            axii.set_xlim(imxlim)
+            axii.set_ylim(imylim)
+
+        # polarization angle
+        if im.stokes:
+            axii = axgrid[ii,3]
+            dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.get_cmap(angcmap),
+                stokes='ang', bunit='deg', dpc=dis,
+                ifreq=ii,
+                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75],
+                vmin=anglim[0], vmax=anglim[1])
+            axii.set_xlim(imxlim)
+            axii.set_ylim(imylim)
+
+            image.plotPolDir(image=im, au=True, ax=axii, ifreq=ii, polunitlen=-2, 
+                nx=16, ny=16, color='k')
+
+    if (opltr is not None) and (inc is not None):
+        for axii in axes:
+            for ir in opltr:
+                ells = Ellipse(xy=(0,0), width=2*ir, height=np.cos(inc*natconst.rad)*2*ir, angle=0,
+                    fill=False, color='k', linestyle=':', linewidth=1)
+                axii.axes.add_patch(ells)
+        
+
     fig.tight_layout()
     fig.savefig(pngname)
     plt.close()
@@ -698,13 +803,13 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None):
 # ------------------------------------------------------------
 def commence(rundir, polunitlen=-2, dis=400, polmax=None, 
         dooutput_op=1, pltopwav=None, 
-        dooutput_im=1, imTblim=None, imxlim=None, imylim=None, 
-        dooutput_wavim=1, 
+        dooutput_im=1, imTblim=None, imxlim=None, imylim=None, opltr=None, 
+        dooutput_wavim=1, anglim=None, angcmap=None, 
         dooutput_xy=0, xyinx=None, tdxlim=None, tdylim=None, 
         dooutput_minor=0, 
         dooutput_stokes=0,
         dooutput_conv=0, fwhm=None, pa=[[0]], 
-        dooutput_beta=0, 
+        dooutput_alpha=0, 
         dooutput_fits=0, bwidthmhz=2000., coord='03h10m05s -10d05m30s',
         dooutput_los=0, dokern=False, 
         dooutput_sed=0, pltsed=None, 
@@ -733,6 +838,8 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
     pltsed : 2d array
              [0,:] for wavelength
              [1,:] for observed flux
+    opltr : list of floats
+        the radii that is desired for overplot in au
     """
 
     if os.path.isdir(rundir) is False:
@@ -856,7 +963,13 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
         # plot images through all wavelengths
         if dooutput_wavim:
             pngname = rundir + '/out_wavim.i%d.png'%imageinc[ii]
-            getOutput_wavim(im, dis, pngname, imTblim=imTblim, imxlim=imxlim, imylim=imylim)
+            getOutput_wavim(im, dis, pngname, imTblim=imTblim, imxlim=imxlim, imylim=imylim, 
+                opltr=opltr, inc=imageinc[ii], anglim=anglim, angcmap=angcmap)
+
+        # plot spectral index through all wavelengths
+        if dooutput_alpha and (ncamwav > 0):
+            pngname = rundir + '/out_alpha.i%d.png'%(imageinc[ii])
+            getOutput_alpha(im, op, pngname, opltr=opltr, inc=imageinc[ii])
 
         ifreq = 0
         for ifreq in range(ncamwav):
@@ -865,7 +978,8 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
             if dooutput_im:
                 pngname = rundir+'/out_im.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
                 getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca, 
-                    pngname, polmax=polmax, imTblim=imTblim, xlim=imxlim, ylim=imylim)
+                    pngname, polmax=polmax, imTblim=imTblim, xlim=imxlim, ylim=imylim, 
+                    opltr=opltr, inc=imageinc[ii])
 
             if dooutput_xy:
                 if xyinx is not None:
@@ -888,10 +1002,6 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
             if dooutput_los:
                 pngname = rundir + '/out_los.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
                 getOutput_los(camwav[ifreq], fkabs, fksca, losdens, lostemp, pngname)
-
-            if (dooutput_beta) and (ifreq > 0):
-                pngname = rundir + '/out_beta.i%d.f%dx%d.png'%(imageinc[ii], camwav[ifreq], camwav[ifreq-1])
-                getOutput_beta(ifreq, im, op, pngname)
 
             if dooutput_fits:
             # output to fits file
@@ -917,14 +1027,15 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                 if dooutput_wavim:
                     pngname = rundir + '/out_wavim.i%d.b%d.png'%(imageinc[ii], ipa)
                     getOutput_wavim(conv, dis, pngname, imTblim=imTblim, 
-                        imxlim=imxlim, imylim=imylim)
+                        imxlim=imxlim, imylim=imylim, opltr=opltr, inc=imageinc[ii], 
+                        anglim=anglim, angcmap=angcmap)
 
                 for ifreq in range(ncamwav):
                     if dooutput_im:
                         pngname = rundir+'/out_im.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
                         getOutput_im(ifreq, dis, conv, optim, tauim, polunitlen, 
                             fkabs, fksca, pngname, polmax=polmax, imTblim=imTblim, 
-                            xlim=imxlim, ylim=imylim)
+                            xlim=imxlim, ylim=imylim, opltr=opltr, inc=imageinc[ii])
 
 #                    if dooutput_xy:
 #                        pngname = rundir+'/out_xy.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)

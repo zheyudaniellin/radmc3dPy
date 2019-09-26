@@ -2472,8 +2472,8 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
 
         # x,y labels
         if nolabel is False:
-            plt.xlabel(xlab)
-            plt.ylabel(ylab)
+            ax.set_xlabel(xlab)
+            ax.set_ylabel(ylab)
 
         # title
         if titleplt is None:
@@ -2488,13 +2488,13 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
         else:
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
-            cbar = plt.colorbar(implot , cax=cax)
+            cbar = plt.colorbar(implot, cax=cax)
             cbar.set_label(cb_label)
 
         # over plot the normalization values
         if bunit is 'norm':
             plottxt = 'Norm=%.2e'%(norm)
-            plt.text(x.max()*0.9,y.min()*0.9, plottxt, color=textcolor, va='bottom', ha='right') 
+            ax.text(x.max()*0.9,y.min()*0.9, plottxt, color=textcolor, va='bottom', ha='right') 
 
         # overplot the total flux in Jy
         if dototflux:
