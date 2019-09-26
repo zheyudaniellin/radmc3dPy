@@ -136,7 +136,7 @@ def getDefaultParams():
         ['dM', '0.', 'constant accretion rate across disk. Uses this if alph is -1'],
         ['T0mid', '50', 'mid plane temperature at Rt'], 
         ['T0atm', '50', 'atmosphere temperature at Rt'], 
-        ['zqratio', '3', 'factor of Ht of where temperature transition occurs'],
+        ['zqratio', '3', 'factor of Ht of where temperature transition occurs. use -1 to not consider T0atm'],
         ['qmid', '-0.5', 'midplane temperature exponent'], 
         ['qatm', '-0.5', 'atmosphere temperature exponent'], 
         ['hdel', '2', 'temperature transition exponent '], 
