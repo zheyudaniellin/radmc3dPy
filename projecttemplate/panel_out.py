@@ -49,5 +49,5 @@ zylutils.set_output.commence(runname,polunitlen=-2, dis=400.,polmax=5.,
          )
 
 clock_stop = time.time()
-print 'Total time elapsed for panel_out.py'
-print clock_stop-clock_begin
+print('Total time elapsed for panel_out.py')
+print(clock_stop-clock_begin)

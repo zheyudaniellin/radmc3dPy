@@ -817,12 +817,12 @@ class radmc3dDustOpac(object):
                     raise ValueError(msg)
 
             if mixgsize == 1:
-		if 'gdens' not in ppar:
-		    msg = 'gdens does not exist in ppar'
-		    raise ValueError(msg)
-		if 'gsdist_powex' not in ppar:
-		    msg = 'gsdist_powex does not exist in ppar'
-		    raise ValueError(msg)
+                if 'gdens' not in ppar:
+                    msg = 'gdens does not exist in ppar'
+                    raise ValueError(msg)
+                if 'gsdist_powex' not in ppar:
+                    msg = 'gsdist_powex does not exist in ppar'
+                    raise ValueError(msg)
 
             if ('mixabun' in ppar) and (mixgsize == 0):
                 ext = []
@@ -889,7 +889,7 @@ class radmc3dDustOpac(object):
 
             elif 'mixabun' not in ppar and mixgsize == 0:
 		# simply not do anything
-		msg = 'not doing anything'
+                msg = 'not doing anything'
             elif ('mixabun' not in ppar) and (mixgsize == 1):
                 msg = 'cannot use the case for mixabun=0 and mixgsize=1'
                 raise ValueError(msg)
