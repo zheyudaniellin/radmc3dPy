@@ -131,6 +131,9 @@ def getDefaultParams():
         ['qatm', '-0.5', 'atmosphere temperature exponent'],
         ['hdel', '2', 'temperature transition exponent '],
         ['cuttemp', '10', 'temperature cut']
+        # alignment
+        ['altype', "'toroidal'", 'alignment type'],
+        ['flip', '[False, False, False]', '']
               ]
 
     return defpar
@@ -462,3 +465,28 @@ def getVelocity(grid=None, ppar=None):
 
     vel = np.zeros([grid.nx, grid.ny, grid.nz, 3], dtype=np.float64)
     return vel
+
+def getDustAlignment(grid=None, ppar=None):
+    """calculates the dust alignment
+
+    Parameters
+    ----------
+    grid : radmc3dGrid
+            An instance of the radmc3dGrid class containing the spatial and wavelength grid
+    
+    ppar : dictionary
+            Dictionary containing all parameters of the model.
+    altype : string
+             See eqDustAlignment in DiskEqs.py
+    
+    Returns
+    -------
+    Returns the dust grain alignment
+    """
+    alpar = {}
+
+    alvec = DiskEqs.eqDustAlignment(ppar['crd_sys'],grid.x,grid.y,grid.z, ppar['altype'], alpar)
+
+    return alvec
+
+
