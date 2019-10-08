@@ -1236,14 +1236,24 @@ class radmc3dDustOpac(object):
 
         """
 
+        # read masteropac
+        mopac = self.readMasterOpac()
+        ext = mopac['ext']
+        nspecies = len(ext)
+
         #
         # Create the wavelength grid if it is not specified
         #
         if wav is None:
-            grid = radmc3dGrid()
-            grid.makeWavelengthGrid(ppar=ppar)
-            wav = grid.wav
-        nwav = len(wav)
+            if self.wav != []:
+                nwav = []
+                for idust in range(nspecies):
+                    nwav.append(len(self.wav[idust]))
+            else:
+                grid = radmc3dGrid()
+                grid.makeWavelengthGrid(ppar=ppar)
+                wav = grid.wav
+                nwav = [len(wav) for ii in nspecies]
 
         if theta is None:
             ntheta = 91
@@ -1252,10 +1262,6 @@ class radmc3dDustOpac(object):
         if ppar is None:
             msg = 'Unknown ppar. The parameter dictionary is required to get the lnk file names.'
             raise ValueError(msg)
-
-        # read masteropac
-        mopac = self.readMasterOpac()
-        ext = mopac['ext']
 
         # calculate alingment factors
         if 'kpara0' in ppar:
@@ -1271,9 +1277,9 @@ class radmc3dDustOpac(object):
 
         for idust in range(len(ext)):
             muang = np.cos(theta * np.pi / 180.)
-            kpara = np.zeros([nwav,ntheta], dtype=np.float64)
-            korth = np.zeros([nwav,ntheta], dtype=np.float64)
-            for inu in range(nwav):
+            kpara = np.zeros([nwav[idust],ntheta], dtype=np.float64)
+            korth = np.zeros([nwav[idust],ntheta], dtype=np.float64)
+            for inu in range(nwav[idust]):
                 # simple model
 #                kpara[inu,:]  = ( 1.e0 - ppar['kpara0']*np.cos(muang*np.pi) ) / ( 1.e0 + ppar['kpara0'])
                 # Lee & Draine 1985. Yang 2019
@@ -1289,7 +1295,7 @@ class radmc3dDustOpac(object):
             self.korth.append(korth)
             self.alignang.append(theta)
 
-        for idust in range(len(ext)):
+        for idust in range(nspecies):
             self.writeDustAlignFact(ext=ext[idust], idust=idust)
             
     @staticmethod
