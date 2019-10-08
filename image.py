@@ -1977,7 +1977,7 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
 
 def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=None, saturate=None, bunit='norm',
               recenter=None, 
-              ifreq=0, cmask_rad=None, cmask_thres=None, interpolation='nearest', cmap=plt.cm.gist_gray, stokes='I',
+              ifreq=0, cmask_rad=None, cmask_thres=None, interpolation='bilinear', cmap=plt.cm.gist_gray, stokes='I',
               oplotbeam=None, beamxy=None, 
               textcolor='w', nocolorbar=False, titleplt=None, nolabel=False, 
               clevs=None, cllabel=True, cllabel_fontsize=10, cllabel_fmt="%.1f", clcol='k', 
@@ -2396,12 +2396,14 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 cb_label = 'log(percent)'
             else:
                 data = data * 100.
-                cb_label = 'Percent [%]'
+                #cb_label = 'Percent [%]'
+                cb_label = '[%]'
         elif bunit.lower() == 'optdepth':
             if log:
                 cb_label = 'log(Optical Depth)'
             else:
-                cb_label = 'Optical Depth'
+                #cb_label = 'Optical Depth'
+                cb_label = ''
             dototflux = 0
             title_bunit = 'Optical Depth'
 
