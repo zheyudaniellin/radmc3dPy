@@ -50,7 +50,7 @@ from . molecule import *
 from . import crd_trans
 
 def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, ispec=None, vturb=False, alvec=False, qvis=False, grid=None,
-             fdir=None, binary=True, old=False, octree=False):
+             fdir=None, binary=False, old=False, octree=False):
     """Reads the physical variables of the model (e.g. density, velocity, temperature).
 
     Parameters

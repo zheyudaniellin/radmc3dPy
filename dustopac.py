@@ -9,7 +9,7 @@ updates I did:
 - set up a ppar['mixgsize'] option to average the dust sizes
 - added ksca_from_z11 attribute. changed: computeDustOpacMie, readOpac
 - changed mixOpac to include mixing scattering matrix
-- added readDustInfo and writeDustInfo to read and write dustinfo.zyl
+- added readDustInfo and writeDustInfo to read and write dustinfo.inp
 - added alignment_mode option in writeMasterOpac to consider dust alignment
 - added kscat0 to set all kscat, scattering matrix to 0
 
@@ -1672,7 +1672,7 @@ class radmc3dDustOpac(object):
 
     @staticmethod
     def readDustInfo(fdir=None):
-        """Reads the dust information file: 'dustinfo.zyl'
+        """Reads the dust information file: 'dustinfo.inp'
         This is not a standard file for radmc3d, but simply read the recorded information of dust species
         format:
             material density of the dust
@@ -1681,7 +1681,7 @@ class radmc3dDustOpac(object):
 
         Parameters
         ----------
-        fname = the name of the file to read. default is dustinfo.zyl in the current directory
+        fname = the name of the file to read. default is dustinfo.inp in the current directory
 
         Returns
         -------
@@ -1690,7 +1690,7 @@ class radmc3dDustOpac(object):
 
             gsize    : list of grain size in micron
         """
-        fname = 'dustinfo.zyl'
+        fname = 'dustinfo.inp'
         if fdir is not None:
             if fdir[-1] is '/':
                 fname = fdir + fname
@@ -1733,7 +1733,7 @@ class radmc3dDustOpac(object):
 
     @staticmethod
     def writeDustInfo(fname=None, ext=None, matdens=None, gsize=None, dweights=None, fdir=None):
-        """ Writes some dust information to dustinfo.zyl
+        """ Writes some dust information to dustinfo.inp
         including specific weight, grain size
 
         Parameters
@@ -1749,20 +1749,20 @@ class radmc3dDustOpac(object):
                   grain size in micron
         """
         if fname is None:
-            fname = 'dustinfo.zyl'
+            fname = 'dustinfo.inp'
 
         if fdir is not None:
             if fdir[-1] is '/':
-                fname = fdir + 'dustinfo.zyl'
+                fname = fdir + 'dustinfo.inp'
             else:
-                fname = fdir + '/dustinfo.zyl'
+                fname = fdir + '/dustinfo.inp'
 
         if ext is None:
-            raise ValueError('ext must be given when writing to dustinfo.zyl')
+            raise ValueError('ext must be given when writing to dustinfo.inp')
         if matdens is None:
-            raise ValueError('matdens must be given when writing to dustinfo.zyl')
+            raise ValueError('matdens must be given when writing to dustinfo.inp')
         if gsize is None:
-            raise ValueError('gsize must be given when writing to dustinfo.zyl')
+            raise ValueError('gsize must be given when writing to dustinfo.inp')
 
         ndust = len(matdens)
         if ndust != len(gsize):

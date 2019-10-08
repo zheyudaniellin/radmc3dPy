@@ -33,7 +33,7 @@ class dustspec(object):
 
         # Waterice from Semenov
         if 'Waterice' in specs:
-            self.lnkfiles.append('/scratch/zdl3gk/data/my_opacity/Semenov/RefractiveIndex/watericek.lnk')
+            self.lnkfiles.append('/home/zdl3gk/mainProjects/my_opacity/Semenov/RefractiveIndex/watericek.lnk')
             self.optconst.append('watericek')
             self.graintype.append('waterice')
             self.swgt.append(0.92)
@@ -41,7 +41,7 @@ class dustspec(object):
 
         # Waterice from Warren2008
         if 'WarrenWater' in specs:
-            self.fnSpec('/scratch/zdl3gk/data/my_opacity/Warren/RefractiveIndex/waterice.lnk', 
+            self.fnSpec('/home/zdl3gk/mainProjects/my_opacity/Warren/RefractiveIndex/waterice.lnk', 
                 'waterice',
                 'waterice', 
                 0.92,
@@ -49,7 +49,7 @@ class dustspec(object):
 
         # organics from Semenov
         if 'Organics' in specs:
-            self.lnkfiles.append('/scratch/zdl3gk/data/my_opacity/Semenov/RefractiveIndex/organicsk.lnk')
+            self.lnkfiles.append('/home/zdl3gk/mainProjects/my_opacity/Semenov/RefractiveIndex/organicsk.lnk')
             self.optconst.append('organicsk')
             self.graintype.append('organics')
             self.swgt.append(1.5)
@@ -57,7 +57,7 @@ class dustspec(object):
 
         # carbon from Jena (Jaeger) 
         if 'Carbon' in specs:
-            self.lnkfiles.append('/scratch/zdl3gk/data/my_opacity/Jena/Carbon/cel400.lnk')
+            self.lnkfiles.append('/home/zdl3gk/mainProjects/my_opacity/Jena/Carbon/cel400.lnk')
             self.optconst.append('cel400.lnk')
             self.graintype.append('carbon')
             self.swgt.append(1.5)
@@ -65,7 +65,7 @@ class dustspec(object):
 
         # organics from Henning 1996
         if 'Henning_Organics' in specs:
-            self.fnSpec('/scratch/zdl3gk/data/my_opacity/Henning/RefractiveIndex/organicsk.lnk',
+            self.fnSpec('/home/zdl3gk/mainProjects/my_opacity/Henning/RefractiveIndex/organicsk.lnk',
                 'organicsk',
                 'organics',
                 1.5,
@@ -73,7 +73,7 @@ class dustspec(object):
 
         # troilite from Henning 1996
         if 'Henning_Troilite' in specs:
-            self.fnSpec('/scratch/zdl3gk/data/my_opacity/Henning/RefractiveIndex/troilitek.lnk',
+            self.fnSpec('/home/zdl3gk/mainProjects/my_opacity/Henning/RefractiveIndex/troilitek.lnk',
                 'troilitek',
                 'troilite',
                 4.83,
@@ -81,7 +81,7 @@ class dustspec(object):
 
         ## silicates from Semenov
         if 'Sil_Sem' in specs:
-            self.lnkfiles.append('/scratch/zdl3gk/data/my_opacity/Semenov/RefractiveIndex/pyrmg70k.lnk')
+            self.lnkfiles.append('/home/zdl3gk/mainProjects/my_opacity/Semenov/RefractiveIndex/pyrmg70k.lnk')
             self.optconst.append('pyrmg70')
             self.graintype.append('silicate')
             self.swgt.append(3.49)
