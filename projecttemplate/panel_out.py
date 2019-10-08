@@ -11,7 +11,7 @@ if os.path.isdir(runname) is False:
     os.system('mkdir '+runname)
 
 # files to be copied
-datacp = ['dustopac.inp', 'dustinfo.zyl', 'dustkap*.inp']
+datacp = ['dustopac.inp', 'dustinfo.inp', 'dustkap*.inp']
 # data to be moved
 datamv = ['dust_temperature.dat', 'dust_density.inp',
           'myimage*.out', 'mytausurf*.out', 'myspectrum*.out', 

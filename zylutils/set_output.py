@@ -723,10 +723,14 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
         vlim = [0, None]
     else:
         vlim = imTblim
+
     if imxlim is None:
         imxlim = (im.x.min()/natconst.au, im.x.max()/natconst.au)
     if imylim is None:
         imylim = (im.y.min()/natconst.au, im.y.max()/natconst.au)
+
+    if anglim is None:
+        anglim = [None, None]
 
     nwav = len(im.wav)
     if im.stokes:
@@ -737,7 +741,7 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
         ncol = np.ceil(nwav / nrow)
         nrow, ncol = int(nrow), int(ncol)
 
-    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*3.5, nrow*3), 
+    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*4, nrow*3), 
         squeeze=False, sharex=True, sharey=True)
     axes = axgrid.flatten()
 
