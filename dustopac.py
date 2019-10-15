@@ -1698,10 +1698,14 @@ class radmc3dDustOpac(object):
         """
         fname = 'dustinfo.inp'
         if fdir is not None:
-            if fdir[-1] is '/':
-                fname = fdir + fname
-            else:
-                fname = fdir + '/' + fname
+            fname = os.path.join(fdir, fname)
+       
+        if os.path.isfile(fname) is False:
+            fname = 'dustinfo.zyl'
+            if fdir is not None:
+                fname = os.path.join(fdir, fname)
+            if os.path.isfile(fname) is False:
+                raise ValueError('dustinfo.inp or dustinfo.zyl is not found') 
 
         with open(fname, 'r') as rfile:
             # file format
