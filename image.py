@@ -2,31 +2,6 @@
 interferometric visibilities and write fits files
 For help on the syntax or functionality of each function see the help of the individual functions
 
-Daniel:
-some bugs I've found
-
-some features I've added
-- added 'tb' option to bunit in plotImage for brightness temperature
-- added more choices in 'saturate' option in plotImage 
-- added turn90 in plotPolDir to turn vectors by 90 degrees
-- added 'percent' option to bunit for polarization fractions
-- added imolspec in makeImage to choose which molecule to image
-- added secondorder in makeImage to do second order integration for imaging
-- added fname in makeImage to move 'image.out' to as fname
-- added tausurf option in makeImage to create tau surface
-- added tausurf attribute to radmc3dImage() 
-- added place holders for writeMovieInp(), and related func for Movie.inp
-- added writeCameraWavelength(), readCameraWavelength()
-- added doppcatch in makeImage for doppler catching
-- cmask can now mask outer regions
-- original convolution used abs() to convert fourier domain to image domain. but that leads to 
-    poor results for stokes Q,U,V. so I'm using real() 
-- imConv can now convolve different fwhm and pa in different wavelengths in one call
-- added totflux attribute and getTotalFlux() method for total flux of an image
-- added readFitsToImage() method to read a fits file and convert to radmc3dImage
-- added rms attribute for noise level, which will be dependent on stokes and frequency
-- corrected "pa" to be used as degrees in getVisibility(), also let add stokes options
-
 """
 from __future__ import absolute_import
 from __future__ import print_function
@@ -2295,12 +2270,12 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
         title_bunit = ''
         if bunit.lower() == 'norm':
             if log:
-                cb_label = 'log(I' + r'$_\nu$' + '/max(I' + r'$_\nu$' + '))'
+                cb_label = r'$log_{10}(I$' + r'$_\nu$' + '/max(I' + r'$_\nu$' + '))'
             else:
                 cb_label = 'I' + r'$_\nu$' + '/max(I' + r'$_\nu$' + ')'
         elif bunit.lower() == 'inu':
             if log:
-                cb_label = 'log(I' + r'$_\nu$' + ' [erg/s/cm/cm/Hz/ster])'
+                cb_label = r'log$_{10}$(I' + r'$_\nu$' + ' [erg/s/cm/cm/Hz/ster])'
             else:
                 cb_label = 'I' + r'$_\nu$' + ' [erg/s/cm/cm/Hz/ster]'
 
@@ -2334,7 +2309,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 # Convert data to Jy/beam
                 data += np.log10(beam_area / pixel_area)
 
-                cb_label = 'log(S' + r'$_\nu$' + '[Jy/beam])'
+                cb_label = r'log$_{10}$(S' + r'$_\nu$' + '[Jy/beam])'
             else:
                 # Convert data to Jy/pixel
                 #data *= (image.sizepix_x * image.sizepix_y / (dpc * nc.pc)**2. * 1e23) #this is also correct
@@ -2351,7 +2326,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
             if log:
                 # convert to mJy/beam
                 data += np.log10(beam_area * 1e3 * 1e23)
-                cb_label = 'log(S' + r'$_\nu$' + '[mJy/beam])'
+                cb_label = r'log$_{10}$(S' + r'$_\nu$' + '[mJy/beam])'
             else:
                 data *= beam_area * 1e3 * 1e23
                 cb_label = 'S' + r'$_\nu$' + ' [mJy/beam]'

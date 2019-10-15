@@ -31,6 +31,8 @@ import traceback
 
 from .. import dustopac
 from .. import natconst
+from . import DiskEqs
+
 import pdb
 
 try:
@@ -130,10 +132,9 @@ def getDefaultParams():
         ['qmid', '-0.5', 'midplane temperature exponent'],
         ['qatm', '-0.5', 'atmosphere temperature exponent'],
         ['hdel', '2', 'temperature transition exponent '],
-        ['cuttemp', '10', 'temperature cut']
+        ['cuttemp', '10', 'temperature cut'], 
         # alignment
-        ['altype', "'toroidal'", 'alignment type'],
-        ['flip', '[False, False, False]', '']
+        ['altype', "'toroidal'", 'alignment type']
               ]
 
     return defpar
