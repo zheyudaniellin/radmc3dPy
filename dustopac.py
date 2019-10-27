@@ -1253,7 +1253,9 @@ class radmc3dDustOpac(object):
                 grid = radmc3dGrid()
                 grid.makeWavelengthGrid(ppar=ppar)
                 wav = grid.wav
-                nwav = [len(wav) for ii in nspecies]
+                nwav = [len(wav) for ii in range(nspecies)]
+        else:
+            nwav = [len(wav) for ii in range(nspecies)]
 
         if theta is None:
             ntheta = 91

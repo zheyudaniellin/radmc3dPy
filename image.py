@@ -379,14 +379,6 @@ class radmc3dImage(object):
             if fname == '':
                 fname = 'image_stokes_' + stokes.strip().upper() + '.fits'
 
-            if stokes.strip().upper() == 'I':
-                istokes = 0
-            if stokes.strip().upper() == 'Q':
-                istokes = 1
-            if stokes.strip().upper() == 'U':
-                istokes = 2
-            if stokes.strip().upper() == 'V':
-                istokes = 3
         else:
             if fname == '':
                 fname = 'image.fits'
@@ -434,14 +426,36 @@ class radmc3dImage(object):
         if casa:
             # Put the stokes axis to the 4th dimension
             # data = np.zeros([1, self.nfreq, self.ny, self.nx], dtype=float)
-            data = np.zeros([1, self.nfreq, self.ny, self.nx], dtype=float)
+
+            if stokes.strip().upper() == 'IQUV':
+                data = np.zeros([4, self.nfreq, self.ny, self.nx], dtype=float)
+            else:
+                data = np.zeros([1, self.nfreq, self.ny, self.nx], dtype=float)
 
             if self.stokes:
-                if self.nfreq == 1:
-                    data[0,0,:,:] = self.image[:,:,istokes, 0] * conv
+                if stokes.strip().upper() == 'IQUV':
+                    if self.nfreq == 1:
+                        for istokes in range(4):
+                            data[istokes,0,:,:] = self.image[:,:,istokes, 0] * conv
+                    else:
+                        for istokes in range(4):
+                            for inu in range(self.nfreq):
+                                data[istokes, inu, :, :] = self.image[:,:,istokes, inu] * conv
                 else:
-                    for inu in range(self.nfreq):
-                        data[0, inu, :, :] = self.image[:,:,istokes, inu] * conv
+                    if stokes.strip().upper() == 'I':
+                        istokes = 0
+                    if stokes.strip().upper() == 'Q':
+                        istokes = 1
+                    if stokes.strip().upper() == 'U':
+                        istokes = 2
+                    if stokes.strip().upper() == 'V':
+                        istokes = 3
+
+                    if self.nfreq == 1:
+                        data[0,0,:,:] = self.image[:,:,istokes, 0] * conv
+                    else:
+                        for inu in range(self.nfreq):
+                            data[0, inu, :, :] = self.image[:,:,istokes, inu] * conv
             else:
                 if self.nfreq == 1:
                     data[0, 0, :, :] = self.image[:, :, 0] * conv
@@ -449,6 +463,18 @@ class radmc3dImage(object):
                     for inu in range(self.nfreq):
                         data[0, inu, :, :] = self.image[:, :, inu] * conv
         else: # if not casa
+            if stokes.strip().upper == 'IQUV':
+                raise ValueError('4D image with Stokes is not available if not casa')
+
+            if stokes.strip.upper() == 'I':
+                istokes = 0
+            if stokes.strip().upper() == 'Q':
+                istokes = 1
+            if stokes.strip().upper() == 'U':
+                istokes = 2
+            if stokes.strip().upper() == 'V':
+                istokes = 3
+
             data = np.zeros([self.nfreq, self.ny, self.nx], dtype=float)
             if self.stokes:
                 if stokes.strip().upper() != 'PI':
