@@ -108,6 +108,12 @@ class radmc3dGrid(object):
         self.wav = np.zeros(0, dtype=np.float64)
         self.freq = np.zeros(0, dtype=np.float64)
 
+        # frequency grid for radiation field
+        self.radnfreq = 0
+        self.radnwav = 0
+        self.radfreq = np.zeros(0, dtype=np.float64)
+        self.radwav = np.zeros(0, dtype=np.float64)
+
     # --------------------------------------------------------------------------------------------------
     def makeWavelengthGrid(self, wbound=None, nw=None, ppar=None):
         """Creates the wavelength/frequency grid.
@@ -172,11 +178,8 @@ class radmc3dGrid(object):
         if not old:
             if fname == '':
                 fname = 'wavelength_micron.inp'
-                if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
+            if fdir is not None:
+                fname = os.path.join(fdir, fname)
 
             print('Writing ' + fname)
             with open(fname, 'w') as wfile:

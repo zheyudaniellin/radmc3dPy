@@ -433,6 +433,7 @@ class radmc3dPar(object):
                      'Code parameters'])
         self.setPar(['nphot_spec', 'int(1e5)', '  Nr of photons for the scattering Monte Carlo (for spectra)',
                      'Code parameters'])
+        self.setPar(['nphot_mono', 'int(1e6)', ' Nr of photons for mcmono when calculating radiation field', 'Code parameters'])
         self.setPar(
             ['scattering_mode_max', '1', '  0 - no scattering, 1 - isotropic scattering, 2 - anizotropic scattering',
              'Code parameters'])

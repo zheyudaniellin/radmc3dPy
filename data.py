@@ -78,11 +78,16 @@ class radmc3dData(object):
 
     alvec     : ndarray
                 Dust alignment vector field
+
     qvis      : ndarray
                 heating for heatsource.inp. same dimensions as gas density
 
     bfield    : ndarray
-                magnetic field
+                magnetic field. same dimensions as gas velocity
+
+    radfield  : ndarray
+                the radiation field calculated by "radmc3d mcmono"
+
     """
 
     def __init__(self, grid=None):
@@ -108,6 +113,7 @@ class radmc3dData(object):
         self.alvec = np.zeros(0, dtype=np.float64)
         self.qvis = np.zeros(0, dtype=np.float64)
         self.bfield = np.zeros(0, dtype=np.float64)
+        self.radfield = np.zeros(0, dtype=np.float64)
 
     def _scalarfieldWriter(self, data=None, fname='', binary=True, octree=False):
         """Writes a scalar field to a file.
@@ -1260,6 +1266,40 @@ class radmc3dData(object):
         tot_lum = lum.sum()
         return tot_lum
  
+    def readRadiationField(self, fname='', fdir=None):
+        """ read the radiation field
+        """
+        if fname == '':
+            fname = 'mean_intensity.out'
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
+
+        with open(fname, 'r') as rfile:
+            # iformat
+            # nrcells
+            # nfreq
+            hdr = np.fromfile(rfile, count=3, dtype=np.int64, sep=" ")
+            iformat = hdr[0]
+
+            self.grid.radnfreq = hdr[2]
+            self.grid.radnwav = hdr[2]
+ 
+            # read frequency 
+            freq = np.fromfile(rfile, count=hdr[2], dtype=np.float64, sep=" ")
+            self.grid.radfreq = freq
+            self.grid.radwav = nc.cc * 1e4 / freq           
+ 
+            # read data
+            data = np.fromfile(rfile, count=-1, dtype=np.float64, sep=" ")
+
+            # reformat
+            data = np.reshape(data, [self.grid.radnfreq, self.grid.nz, self.grid.ny, self.grid.nx])
+            data = np.swapaxes(data, 0, 3)
+            data = np.swapaxes(data, 1, 2)
+
+            self.radfield = np.squeeze(data)
+
+        return True
 
     def writeDustDens(self, fname='', binary=False, old=False, octree=False,fdir=None):
         """Writes the dust density.
