@@ -946,6 +946,61 @@ class radmc3dImage(object):
         self.x = ((np.arange(self.nx, dtype=np.float64) + 0.5) - self.nx / 2) * self.sizepix_x
         self.y = ((np.arange(self.ny, dtype=np.float64) + 0.5) - self.ny / 2) * self.sizepix_y
 
+    def writeImage(self, fname=None,  binary=False, old=False ):
+        """ writes the radmc3d image file """
+        if old:
+            raise ValueError('not available')
+        else:
+            if binary:
+                raise ValueError('not available')
+            else:
+
+                print('writing '+ fname)
+
+                if self.stokes:
+                    iformat = 3
+                else:
+                    iformat = 1
+
+                with open(fname, 'w') as wfile:
+
+                    # Format number
+                    wfile.write('%d\n'%iformat)
+
+                    # Nr of pixels
+                    wfile.write('%d %d \n'%(self.nx, self.ny))
+
+                    # Nr of frequencies
+                    wfile.write('%d\n'%self.nwav)
+
+                    # Pixel sizes
+                    wfile.write('%.3f %.3f\n'%(self.sizepix_x, self.sizepix_y))
+
+                    # Wavelength of the image
+                    for iwav in range(self.nwav):
+                        wfile.write('%e\n'%self.wav[iwav])
+
+                    # write image
+                    if iformat == 1:
+                        for iwav in range(self.nwav):
+                            # blank line
+                            wfile.write('\n')
+                            for ix in range(self.nx):
+                                for iy in range(self.ny):
+                                    wfile.write('%e\n'%self.image[ix,iy,iwav])
+
+                    elif iformat == 3:
+                        for iwav in range(self.nwav):
+                            # blank line
+                            wfile.write('\n')
+                            for iy in range(self.ny):
+                                for ix in range(self.nx):
+                                    wfile.write('%e \t %e \t %e \t %e\n'%(self.image[ix,iy,0,iwav], 
+                                                               self.image[ix,iy,1,iwav],
+                                                               self.image[ix,iy,2,iwav],
+                                                               self.image[ix,iy,3,iwav]))
+
+
     def readTausurf(self, fname=None, binary=False, old=False):
         """Reads a tau surface  image calculated by RADMC-3D
 
@@ -3599,7 +3654,7 @@ def makeSpectrum(npix=None, incl=None, wav=None, sizeau=None,
 
     return 0
 
-def writeCameraWavelength(camwav=None, fdir=None):
+def writeCameraWavelength(camwav=None, fdir=None, fname='camera_wavelength_micron.inp'):
     """ writes camera_wavelength_micron.inp for this list of wavelengths
     Parameters
     ----------
@@ -3614,7 +3669,6 @@ def writeCameraWavelength(camwav=None, fdir=None):
 
     ncamwav = len(camwav)
 
-    fname = 'camera_wavelength_micron.inp'
     if fdir is not None:
         if fdir[-1] is '/':
             fname = fdir + fname
