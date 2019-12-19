@@ -2600,7 +2600,7 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 elly = beamxy[1]
 
             # angle
-            beamang = np.pi - image.pa[ipa]
+            beamang = 180. - image.pa[ipa]
 
             ells = Ellipse(xy=(ellx, elly), width=ewidth,
                                height=eheight, angle=beamang)
