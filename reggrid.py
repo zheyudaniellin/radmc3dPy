@@ -74,6 +74,18 @@ class radmc3dGrid(object):
     zi         : ndarray
                 Cell interfaces in the z (cartesian) / z (cylindrical) / phi (spherical)  dimension
 
+    xtype      : list !! Not done yet !!
+                The type of axis spacing
+                 - 'u' = equal spacing
+                 - 'l' = logarithmic. smaller spacing from beginning of interval. Should not cross any zeros within the interval, e.g. [-1, 1] cannot be in logarithmic spacing
+                 - 'd' = logarithmic. smaller spacing towards the end of interval. Should not cross any zeros within the interval. 
+
+    ytype      : list
+                The type of axis spacing. see 'xtype' argument
+
+    ztype      : list
+                The type of axis spcing
+
     wav        : ndarray
                 Wavelengh  grid
 
@@ -102,6 +114,9 @@ class radmc3dGrid(object):
         self.xi = np.zeros(0, dtype=np.float64)
         self.yi = np.zeros(0, dtype=np.float64)
         self.zi = np.zeros(0, dtype=np.float64)
+        self.xtype = []
+        self.ytype = []
+        self.ztype = []
 
         self.nwav = 0
         self.nfreq = 0
@@ -933,3 +948,9 @@ class radmc3dGrid(object):
             raise ValueError('Coordinate system ' + self.crd_sys + ' is not yet supported.')
 
         return vol
+
+    @staticmethod
+    def getAxis(dum):
+        """
+        calculate an axis using the arguments. not done yet
+        """
