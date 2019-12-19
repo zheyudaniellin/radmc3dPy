@@ -1938,10 +1938,12 @@ class radmc3dDustOpac(object):
                     if scattering_mode_max < 5:
                         wfile.write('%-15s %s\n' % ('1', 'Way in which this dust species is read'))
                     else:
-                        if alignment_mode is 0: 
+                        if (alignment_mode is 0) | (alignment_mode is False): 
                             wfile.write('%-15s %s\n' % ('10', 'Way in which this dust species is read'))
-                        else:
+                        elif (alignment_mode is 1) | (alignment_mode is True):
                             wfile.write('%-15s %s\n' % ('20', 'Way in which this dust species is read'))
+                        else:
+                            raise ValueError('alignment_mode argument unknown')
 
                     # Check if the dust grain is thermal or quantum heated
                     if therm:
@@ -2473,7 +2475,7 @@ def computeDustOpacMie(fname='', matdens=None, agraincm=None, lamcm=None,
             if verbose and nagr > 1:
                 print("...Doing grain size %13.6e cm" % agr[l])
             #
-            # Compute x
+            # Compute x = 2 pi a / lambda
             #
             x = 2*np.pi*agr[l]/lamcm[i]
             #
@@ -2532,6 +2534,9 @@ def computeDustOpacMie(fname='', matdens=None, agraincm=None, lamcm=None,
         # is that extreme forward scattering is, in most cases, equivalent
         # to no scattering at all.
         #
+
+        # why are we normalizing ksca and g to the scattering matrix, 
+        # instead normalizing the scattering matrix to the ksca? 
         if chopforward > 0:
             iang = np.where(angles < chopforward)
             if angles[0] == 0.0:
@@ -2570,6 +2575,9 @@ def computeDustOpacMie(fname='', matdens=None, agraincm=None, lamcm=None,
             msg += "But I am using chopforward to remove strong forward scattering, and then renormalized kapscat."
         print(msg)
 #        warnings.warn(msg, RuntimeWarning)
+
+    print("Finished grain size = %.2e [cm]"%agraincm)
+
     #
     # Now return what we computed in a dictionary
     #
