@@ -269,7 +269,7 @@ class radmc3dGrid(object):
                 if 'nx' in ppar:
                     if not isinstance(ppar['nx'], list):
                         ppar['nx'] = [ppar['nx']]
-                    nxi = [i + 1 for i in ppar['nx']]
+                    nxi = [i + 1 for i in ppar['nx']] # number of wall points for each interval
                     if ppar['nx'][0] == 0:
                         self.act_dim[0] = 0
                 else:
@@ -475,20 +475,22 @@ class radmc3dGrid(object):
             # Create the x axis
             #
             if len(nxi) > 1:
-                self.nxi = sum(nxi)
-                self.nx = self.nxi - 1
-                self.xi = xbound[0] * (xbound[1] / xbound[0]) ** (
-                    np.arange(nxi[0], dtype=np.float64) / float(nxi[0]))
-                for ipart in range(1, len(nxi) - 1):
-                    dum = xbound[ipart] * (xbound[ipart + 1] / xbound[ipart]) ** (
-                        np.arange(nxi[ipart], dtype=np.float64) / float(nxi[ipart]))
-                    self.xi = np.append(self.xi, dum)
+                xi = []
+                nparts = len(nxi)
+                for ipart in range(nparts):
+                    xstart = float(xbound[ipart])
+                    xend = float(xbound[ipart + 1])
+                    xdum = xstart * (xend / xstart)**(
+                        np.arange(nxi[ipart], dtype=np.float64) / float(nxi[ipart]-1))
+                    if ipart < (nparts-1):
+                        xi.extend(xdum[:-1])
+                    else:
+                        xi.extend(xdum)
 
-                ipart = len(nxi) - 1
-                dum = xbound[ipart] * (xbound[ipart + 1] / xbound[ipart]) ** (
-                    np.arange(nxi[ipart], dtype=np.float64) / float(nxi[ipart] - 1))
-                self.xi = np.append(self.xi, dum)
-                self.x = np.sqrt(self.xi[0:self.nx] * self.xi[1:self.nx + 1])
+                self.xi = np.array(xi)
+                self.x = np.sqrt(self.xi[1:] * self.xi[:-1])
+                self.nxi = len(self.xi)
+                self.nx = self.nxi - 1
             else:
                 if self.act_dim[0] == 1:
                     self.nxi = nxi[0]
@@ -504,97 +506,47 @@ class radmc3dGrid(object):
 
             # Refinement of the inner edge of the grid
             # This has to be done properly
-            if 'xres_nlev' in ppar:
-                if ppar['xres_nlev'] > 0:
-                    ri_ext = np.array([self.xi[0], self.xi[ppar['xres_nspan']]])
-                    for i in range(ppar['xres_nlev']):
-                        dum_ri = ri_ext[0] + (ri_ext[1] - ri_ext[0]) * np.arange(ppar['xres_nstep'] + 1,
-                                                                                 dtype=np.float64) / float(
-                            ppar['xres_nstep'])
-                        # print ri_ext[0:2]/au
-                        # print dum_ri/au
-                        ri_ext_old = np.array(ri_ext)
-                        ri_ext = np.array(dum_ri)
-                        ri_ext = np.append(ri_ext, ri_ext_old[2:])
+            if ppar is not None:
+                if 'xres_nlev' in ppar:
+                    if ppar['xres_nlev'] > 0:
+                        ri_ext = np.array([self.xi[0], self.xi[ppar['xres_nspan']]])
+                        for i in range(ppar['xres_nlev']):
+                            dum_ri = ri_ext[0] + (ri_ext[1] - ri_ext[0]) * np.arange(ppar['xres_nstep'] + 1,
+                                                                                     dtype=np.float64) / float(
+                                ppar['xres_nstep'])
+                            # print ri_ext[0:2]/au
+                            # print dum_ri/au
+                            ri_ext_old = np.array(ri_ext)
+                            ri_ext = np.array(dum_ri)
+                            ri_ext = np.append(ri_ext, ri_ext_old[2:])
 
-                    r_ext = (ri_ext[1:] + ri_ext[:-1]) * 0.5
+                        r_ext = (ri_ext[1:] + ri_ext[:-1]) * 0.5
 
-                    self.xi = np.append(ri_ext, self.xi[ppar['xres_nspan'] + 1:])
-                    self.x = np.append(r_ext, self.x[ppar['xres_nspan']:])
-                    self.nx = self.x.shape[0]
-                    self.nxi = self.xi.shape[0]
+                        self.xi = np.append(ri_ext, self.xi[ppar['xres_nspan'] + 1:])
+                        self.x = np.append(r_ext, self.x[ppar['xres_nspan']:])
+                        self.nx = self.x.shape[0]
+                        self.nxi = self.xi.shape[0]
 
                     #
                     # Create the y axis
                     #
             if len(nyi) > 1:
-
-                # Check if we go to the full [0,pi] interval or only use the upper half-plane [0, pi/2]
-
-                if ybound[len(ybound) - 1] != np.pi / 2.:
-                    self.nyi = sum(nyi) + 1
-                    self.ny = self.nyi - 1
-                    self.yi = ybound[0] + (ybound[1] - ybound[0]) * (
-                        np.arange(nyi[0], dtype=np.float64) / float(nyi[0]))
-
-                    for ipart in range(1, len(nyi) - 1):
-                        # Now make sure that pi/2 will be a cell interface
-                        #
-                        # BUGFIX! 16-05-2012
-                        # The grid was not symmetric to pi/2 when the grid contained multiple sections (i.e. len(nyi)>1)
-                        # This is now fixed
-                        if ybound[ipart] < np.pi / 2.:
-                            dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                                np.arange(nyi[ipart], dtype=np.float64) / float(nyi[ipart]))
-                        else:
-                            if ybound[ipart] == np.pi / 2.:
-                                dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                                    (np.arange(nyi[ipart] + 1, dtype=np.float64)) / (float(nyi[ipart])))
-                            else:
-                                dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                                    (np.arange(nyi[ipart], dtype=np.float64) + 1.) / float(nyi[ipart]))
-
-                        self.yi = np.append(self.yi, dum)
-
-                    ipart = len(nyi) - 1
-                    if len(nyi) == 2:
-                        dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                            (np.arange(nyi[ipart] + 1, dtype=np.float64)) / (float(nyi[ipart])))
+                yi = []
+                nparts = len(nyi)
+                for ipart in range(nparts):
+                    ystart = ybound[ipart]
+                    yend = ybound[ipart+1]
+                    ydum = ystart + (yend - ystart) * (
+                        np.arange(nyi[ipart], dtype=np.float64) / float(nyi[ipart]-1))
+                    if ipart < (nparts-1):
+                        yi.extend(ydum[:-1])
                     else:
-                        dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                            (np.arange(nyi[ipart], dtype=np.float64) + 1.) / float(nyi[ipart]))
+                        yi.extend(ydum)
 
-                else:
-                    self.nyi = sum(nyi) + 1
-                    self.ny = self.nyi - 1
-                    self.yi = ybound[0] + (ybound[1] - ybound[0]) * (
-                        np.arange(nyi[0], dtype=np.float64) / float(nyi[0]))
-                    for ipart in range(1, len(nyi) - 1):
-                        # Now make sure that pi/2 will be a cell interface
-                        #
-                        # BUGFIX! 16-05-2012
-                        # The grid was not symmetric to pi/2 when the grid contained multiple sections (i.e. len(nyi)>1)
-                        # This is now fixed
-                        if ybound[ipart] < np.pi / 2.:
-                            dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                                np.arange(nyi[ipart], dtype=np.float64) / float(nyi[ipart]))
-                        else:
-                            dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                                (np.arange(nyi[ipart] + 1, dtype=np.float64)) / (float(nyi[ipart])))
-
-                        self.yi = np.append(self.yi, dum)
-
-                    ipart = len(nyi) - 1
-
-                    if len(nyi) == 2:
-                        dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                            (np.arange(nyi[ipart] + 1, dtype=np.float64)) / (float(nyi[ipart])))
-                    else:
-                        dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                            (np.arange(nyi[ipart], dtype=np.float64) + 1.) / float(nyi[ipart]))
-
-                self.yi = np.append(self.yi, dum)
-                self.y = 0.5 * (self.yi[0:self.ny] + self.yi[1:self.ny + 1])
+                self.yi = np.array(yi)
+                self.y = 0.5 * (self.yi[1:] + self.yi[:-1])
+                self.nyi = len(self.yi)
+                self.ny = self.nyi - 1
 
             else:
                 if self.act_dim[1] == 1:
@@ -608,24 +560,26 @@ class radmc3dGrid(object):
                     self.yi = [0., 0., ]
                     self.ny = 1
                     self.nyi = 2
+
                     #
                     # Create the z axis
-
             if len(nzi) > 1:
-                self.nzi = sum(nzi)
-                self.nz = self.nzi - 1
+                zi = []
+                nparts = len(nzi)
+                for ipart in range(nparts):
+                    zstart = zbound[ipart]
+                    zend = zbound[ipart+1]
+                    zdum = zstar + (zend - zstart) * (
+                        np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart]-1))
+                    if ipart < (nparts-1):
+                        zi.extend(zdum[:-1])
+                    else:
+                        zi.extend(zdum)
 
-                self.zi = zbound[0] + (zbound[1] - zbound[0]) * (
-                    np.arange(nzi[0], dtype=np.float64) / float(nzi[0]))
-                for ipart in range(1, len(nzi) - 1):
-                    dum = zbound[ipart] + (zbound[ipart + 1] - zbound[ipart]) * (
-                        np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart]))
-                    self.zi = np.append(self.zi, dum)
-                ipart = len(nzi) - 1
-                dum = zbound[ipart] + (zbound[ipart + 1] - zbound[ipart]) * (
-                    np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart] - 1))
-                self.zi = np.append(self.zi, dum)
-                self.z = 0.5 * (self.zi[0:self.nz] + self.zi[1:self.nz + 1])
+                self.zi = np.array(zi)
+                self.z = 0.5 * (self.zi[1:] + self.zi[:-1])
+                self.nzi = len(self.zi)
+                self.nx = self.nzi - 1
             else:
                 if self.act_dim[2] == 1:
                     self.nzi = nzi[0]

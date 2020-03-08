@@ -1415,7 +1415,7 @@ class radmc3dImage(object):
             if self.nfreq == 1:
                 totflux = np.zeros([4], dtype=np.float64)
                 for istokes in range(4):
-                    imag = self.image[:,:,istokes, 0]
+                    imag = self.image[:,:,istokes, 0].copy()
                     if self.rms != None:
                         reg = imag < (threshold * self.rms[istokes,0])
                         imag[reg] = 0.0
@@ -1425,7 +1425,7 @@ class radmc3dImage(object):
                 totflux = np.zeros([4, self.nfreq], dtype=np.float64)
                 for ifreq in range(self.nfreq):
                     for istokes in range(4):
-                        imag = self.image[:,:,istokes,ifreq]
+                        imag = self.image[:,:,istokes,ifreq].copy()
                         if self.rms != None:
                             reg = imag < (threshold * self.rms[istokes, ifreq])
                             imag[reg] = 0.0
@@ -1433,12 +1433,12 @@ class radmc3dImage(object):
         else:
             if self.nfreq == 1:
                 totflux = np.zeros([1], dtype=np.float64)
-                imag = self.image[:,:,0]
+                imag = self.image[:,:,0].copy()
                 totflux[0] = np.sum(np.sum(imag))
             else:
                 totflux = np.zeros([self.nfreq], dtype=np.float64)
                 for ifreq in range(self.nfreq):
-                    imag = self.image[:,:,ifreq]
+                    imag = self.image[:,:,ifreq].copy()
                     if self.rms != None:
                         reg = imag < (threshold * self.rms[ifreq])
                         imag[reg] = 0.0
@@ -2343,8 +2343,8 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
         cmap.set_bad(color='k', alpha=0)
 
 
-        if image.dpc is not 0:
-            dpc = image.dpc
+#        if image.dpc is not 0:
+#            dpc = image.dpc
 
         # Select the unit of the data
 

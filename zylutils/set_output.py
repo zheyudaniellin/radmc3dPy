@@ -71,10 +71,13 @@ def getOptPolEm(opdepth, kpara90, korth90):
     return pol
 
 def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname, 
-        polmax=None, imTblim=None, xlim=None, ylim=None, opltr=None, inc=None):
+        polmax=None, imUnits='Tb', imlim=None, 
+        xlim=None, ylim=None, axisUnits='au', 
+        opltr=None, inc=None):
     """ calculates image
     xlim : tuple
     ylim : tuple
+    axisUnits = 'cm', 'arcsec', 'AU'
     """
     # determine if there is stokes data
     dostokes = False
@@ -83,6 +86,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
             dostokes = False
         else:
             dostokes = True
+
     # image, polarized intensity, pol frac, tau, optical depth, pol vectors
     nsub = 1 #image
     if dostokes: # polarized intensity
@@ -96,6 +100,19 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     if dostokes: #vectors
         nsub = nsub + 1
 
+    # axis units
+    if axisUnits.lower() == 'cm':
+        axis_au = False
+        axis_arcsec = False
+    elif axisUnits.lower() == 'arcsec':
+        axis_au = False
+        axis_arcsec = True
+    elif axisUnits.lower() == 'au':
+        axis_au = True
+        axis_arcsec = False
+    else:
+        raise ValueError('axisUnits not understood')
+
     nrow = np.floor(np.sqrt(nsub))
     ncol = np.ceil(nsub / nrow)
     nrow, ncol = int(nrow), int(ncol)
@@ -107,16 +124,16 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     isubplot = 0
 
     # image
-    if imTblim is not None:
-        imTbvmin, imTbvmax = imTblim[0], imTblim[1]
+    if imlim is not None:
+        imvmin, imvmax = imlim[0], imlim[1]
     else:
-        imTbvmin, imTbvmax = 0, None
+        imvmin, imvmax = 0, None
     ax = axes[isubplot]
     image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
-        arcsec=False, au=True, dpc=dis, oplotbeam='w', 
-        stokes='I', bunit='Tb',ifreq=ifreq, saturate='90percent', 
+        arcsec=axis_arcsec, au=axis_au, dpc=dis, oplotbeam='w', 
+        stokes='I', bunit=imUnits,ifreq=ifreq, saturate='90percent', 
         clevs=[1, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200], clcol='w', 
-        vmin=imTbvmin, vmax=imTbvmax, ax=ax)
+        vmin=imvmin, vmax=imvmax, ax=ax)
     if im.stokes is True:
         image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='w',
             nx=16, ny=16, polunitlen=polunitlen, ifreq=ifreq, ax=ax)
@@ -128,8 +145,8 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
         #ax = fig.add_subplot(nrow,ncol,isubplot)
         ax = axes[isubplot]
         image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear',
-            arcsec=False, au=True, dpc=dis, oplotbeam='w',
-            stokes='PI', bunit='Tb',ifreq=ifreq, saturate='90percent',
+            arcsec=axis_arcsec, au=axis_au, dpc=dis, oplotbeam='w',
+            stokes='PI', bunit=imUnits,ifreq=ifreq, saturate='90percent',
             clevs=[0, 1.0, 10., 100., 200., 500.], clcol='w', 
             ax=ax)
         isubplot = isubplot + 1
@@ -139,7 +156,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
         #ax = fig.add_subplot(nrow,ncol,isubplot)
         ax = axes[isubplot]
         image.plotImage(image=im, cmap=plt.cm.jet, interpolation='bilinear', 
-            arcsec=False, au=True, dpc=dis, ifreq=ifreq,
+            arcsec=axis_arcsec, au=axis_au, dpc=dis, ifreq=ifreq,
             saturate='100percent', stokes='P',bunit='percent' , vmin=0, vmax=polmax,
             clevs=[1., 5.0, 10., 20.], clcol='k', ax=ax)
         isubplot = isubplot + 1
@@ -149,7 +166,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
         ax = axes[isubplot]
         kext = fkabs(im.wav[ifreq]) + fksca(im.wav[ifreq])
         image.plotImage(image=optim, cmap=plt.cm.jet, interpolation='bilinear',
-            arcsec=False, au=True, dpc=dis, ifreq=ifreq,
+            arcsec=axis_arcsec, au=axis_au, dpc=dis, ifreq=ifreq,
             saturate='100percent', stokes='I', bunit='optdepth',
             clevs=[0.1,1.,5., 10.,100.], clcol='w', ax=ax
             )
@@ -167,7 +184,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
             vmax = tauim.image[:,:,0,:].max()/natconst.au
         # tausurface
         image.plotImage(image=tauim, cmap=plt.cm.jet, interpolation='bilinear',
-            arcsec=False, au=True, dpc=dis,
+            arcsec=axis_arcsec, au=axis_au, dpc=dis,
             stokes='I', bunit='length', ifreq=ifreq,
             vmin=-vmax,
             vmax=vmax, ax=ax)
@@ -177,7 +194,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
         if nx > 50: nx = 50
         ny = nx
         # polarization vectors
-        image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='k',
+        image.plotPolDir(image=im, arcsec=axis_arcsec, au=axis_au, dpc=dis, color='k',
             nx=nx, ny=ny, polunitlen=polunitlen, ifreq=ifreq, ax=ax)
         ax.set_xlim(-xmax, xmax)
         ax.set_ylim(-xmax, xmax)
@@ -186,7 +203,7 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     # only polarized vectors that varies with polarized fraction, no image
     if dostokes:
         ax = axes[isubplot]
-        image.plotPolDir(image=im, arcsec=False, au=True, dpc=dis, color='k',
+        image.plotPolDir(image=im, arcsec=axis_arcsec, au=axis_au, dpc=dis, color='k',
             nx=16, ny=16, polunitlen=-1, ifreq=ifreq, ax=ax)
         ax.set_title('Polarization E Vectors')
 
@@ -807,7 +824,7 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
 # ------------------------------------------------------------
 def commence(rundir, polunitlen=-2, dis=400, polmax=None, 
         dooutput_op=1, pltopwav=None, 
-        dooutput_im=1, imTblim=None, imxlim=None, imylim=None, opltr=None, 
+        dooutput_im=1, imlim=None, imUnits=None, imxlim=None, imylim=None,opltr=None,imaxisUnits='au',
         dooutput_wavim=1, anglim=None, angcmap=None, 
         dooutput_xy=0, xyinx=None, tdxlim=None, tdylim=None, 
         dooutput_minor=0, 
@@ -982,8 +999,9 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
             if dooutput_im:
                 pngname = rundir+'/out_im.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
                 getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca, 
-                    pngname, polmax=polmax, imTblim=imTblim, xlim=imxlim, ylim=imylim, 
-                    opltr=opltr, inc=imageinc[ii])
+                    pngname, polmax=polmax, imlim=None, imUnits='Tb', 
+                    xlim=imxlim, ylim=imylim, 
+                    opltr=opltr, inc=imageinc[ii], axisUnits=imaxisUnits)
 
             if dooutput_xy:
                 if xyinx is not None:
@@ -1038,8 +1056,10 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                     if dooutput_im:
                         pngname = rundir+'/out_im.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
                         getOutput_im(ifreq, dis, conv, optim, tauim, polunitlen, 
-                            fkabs, fksca, pngname, polmax=polmax, imTblim=imTblim, 
-                            xlim=imxlim, ylim=imylim, opltr=opltr, inc=imageinc[ii])
+                            fkabs, fksca, pngname, polmax=polmax, 
+                            imlim=imlim, imUnits=imUnits, 
+                            xlim=imxlim, ylim=imylim, opltr=opltr, inc=imageinc[ii], 
+                            axisUnits=imaxisUnits)
 
 #                    if dooutput_xy:
 #                        pngname = rundir+'/out_xy.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)

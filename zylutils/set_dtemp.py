@@ -45,7 +45,7 @@ def create_opac(temp2ddir, mopac0, op):
     """ create opacity for temperature calculations
     """
     # copy dustinfo.zyl, since that won't be changed
-    os.system('cp dustinfo.zyl '+temp2ddir)
+    os.system('cp dustinfo.inp '+temp2ddir)
 
     ndust = len(mopac0['ext'])
     opac_align = mopac0['align'][0]
@@ -62,6 +62,8 @@ def create_opac(temp2ddir, mopac0, op):
 
     # if alignment is turned on, turn it off when calculating temperature
     # copy the original settings of dustopac.inp, but just turn off alignment
+    fname = 'dustopac.inp'
+    os.system('cp %s %s'%(fname, temp2ddir))
     if opac_align:
         op.writeMasterOpac(ext=mopac0['ext'], therm=mopac0['therm'],
             scattering_mode_max=scatmode_max, alignment_mode=0, fdir=temp2ddir)
@@ -178,6 +180,7 @@ def pipeline(dohydroeq=0, itermax=0, scatmode='1'):
     temp2ddir = 'temp2d'
     os.system('rm -rf '+temp2ddir)
     os.system('mkdir '+temp2ddir)
+    print('created directory to store 2d temperature calculation')
 
     # read some original settings
     op0 = dustopac.radmc3dDustOpac()
@@ -205,6 +208,7 @@ def pipeline(dohydroeq=0, itermax=0, scatmode='1'):
     dat2d, dat3d = create_data(temp2ddir, grid2d, grid3d, ndust)
 
     # calculate temperature
+    print('==== begin calculation for temperature ====')
     dat2d = create_temp2d(temp2ddir, dat2d)
 
     # hydrostatic equilibrium
