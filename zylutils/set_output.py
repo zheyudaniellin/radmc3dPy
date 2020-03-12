@@ -231,7 +231,8 @@ def getOutput_im(ifreq, dis, im, optim, tauim, polunitlen, fkabs, fksca,pngname,
     fig.savefig(pngname)
     plt.close()
 
-def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname):
+def getOutput_xy(ifreq, tau3d, dat, acclum, tdxlim, tdylim, 
+    pngname=None, parobj=None, returnfig=False):
     """ calculate meridonial density and temperature
     Parameters
     ----------
@@ -240,10 +241,9 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
     tdxlim : tuple of 2 floats
         (xmin, xmax) where x is the radius coordinate
     tdylim : tuple of 2 floats
-        (ymin, ymax) where y is the height coordinate
+        (ymin, ymax) where y is the height coordinate in theta
     """
     totdmass = dat.getDustMass()
-    plt.figure(num=ifreq, figsize=(14,8))
 
     if tau3d is not None:
         # get the tau3d x,y,z coordinates. 
@@ -302,17 +302,22 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
     if tdxlim is not None:
         xmin, xmax = tdxlim[0], tdxlim[1]
     if tdylim is not None:
-        ymin, ymax = tdylim[0], tdylim[1]
+        thetamin, thetamax = tdylim[0], tdylim[1]
+        ymin = xmax * np.cos(dat.grid.y.max())
+        ymax = xmax*np.cos(dat.grid.y.min()) # for cartesian coordinates
 
+    # ==== set up figure 
     npltrow = 2
     npltcol = 3
+    fig, axgrid = plt.subplots(num=ifreq, figsize=(14,8), squeeze=False, 
+        nrows=npltrow, ncols=npltcol)
 
     # density structure in x,z
-    plt.subplot(npltrow, npltcol,1)
-    sliceplt = analyze.plotSlice2D(data=dat,
+    ax = axgrid[0, 0] 
+    sliceplt = analyze.plotSlice2D(data=dat, ax=ax, 
         var='ddens', ispec=-1,
         plane='xy', crd3=0.0,
-        log=True, vmin=None, vmax=None,
+        log=True, vmin=1e-20, vmax=None,
         linunit='au', angunit='deg',
         gridcolor='r', gridalpha=1, showgrid=False,
         contours=False, coverplot=True,
@@ -320,24 +325,24 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%.1e',
         lattitude=False, Sph2Cart=True, mirror=plot2dmirror)
     if (xmax is not None) and (ymax is not None):
-        plt.text(xmax*0.9, ymin*0.9,
+        ax.text(xmax*0.9, ymin*0.9,
              'Total Dust=%.1e Msun'%(totdmass/natconst.ms),
              va='bottom', ha='right', color='w')
     if (tau_y is not None) and (tau_z is not None):
-        plt.plot(tau_y, tau_z, 'w')
-    plt.legend()
-#    plt.ylim(-dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au)
+        ax.plot(tau_y, tau_z, 'w')
+    ax.legend()
+#    ax.ylim(-dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au)
     if xmax is not None:
-        plt.xlim(xmin , xmax)
+        ax.set_xlim(xmin , xmax)
     if (ymin is not None) and (ymax is not None):
-        plt.ylim(ymin, ymax)
+        ax.set_ylim(ymin, ymax)
 
     # density structure in radius, theta
-    plt.subplot(npltrow, npltcol,4)
-    analyze.plotSlice2D(data=dat, 
+    ax = axgrid[1, 0]
+    analyze.plotSlice2D(data=dat, ax=ax, 
         var='ddens', ispec=-1,
         plane='xy', crd3=0.0,
-        log=True, vmin=None, vmax=None,
+        log=True, vmin=1e-20, vmax=None,
         linunit='au', angunit='deg',
         gridcolor='r', gridalpha=1, showgrid=False,
         contours=False, coverplot=True,
@@ -345,14 +350,15 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%.1e',
         lattitude=False, Sph2Cart=False, mirror=plot2dmirror)
     if (tau_r is not None) and (tau_tta is not None):
-        plt.plot(tau_r, tau_tta*180./np.pi, 'w')
-    plt.legend()
-#    plt.ylim(-dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au)
-    plt.xscale('symlog')
+        ax.plot(tau_r, tau_tta*180./np.pi, 'w')
+    ax.legend()
+#    ax.set_ylim(-dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au)
+    ax.set_xscale('symlog')
 
     # temperature structure
-    plt.subplot(npltrow, npltcol,2)
-    temp_slice = analyze.plotSlice2D(data=dat, var='dtemp', plane='xy', crd3=0.,
+    ax = axgrid[0, 1]
+    temp_slice = analyze.plotSlice2D(data=dat, ax=ax, 
+        var='dtemp', plane='xy', crd3=0.,
         ispec=0, log=True, linunit='au', angunit='deg',
         gridcolor='r', gridalpha=1, showgrid=False,
         vmin=10.,
@@ -361,21 +367,22 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%d',
         lattitude=False, Sph2Cart=True, mirror=plot2dmirror)
     if (tau_y is not None) and (tau_z is not None):
-        plt.plot(tau_y, tau_z, 'w')
-    plt.legend()
-#    plt.ylim(-dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au)
+        ax.plot(tau_y, tau_z, 'w')
+    ax.legend()
+#    ax.set_ylim(-dat.grid.x.max()/natconst.au, dat.grid.x.max()/natconst.au)
     if xmax is not None:
-        plt.xlim(xmin , xmax)
+        ax.set_xlim(xmin , xmax)
     if (ymin is not None) and (ymax is not None):
-        plt.ylim(ymin, ymax)
+        ax.set_ylim(ymin, ymax)
     if (xmax is not None) and (ymin is not None) and (acclum > 0):
         plottxt = 'AccLum=%.1e Lsun'%(acclum/natconst.ls)
-        plt.text(xmax*0.9,ymin*0.9, plottxt, 
+        ax.text(xmax*0.9,ymin*0.9, plottxt, 
             va='bottom',ha='right', color='w')
 
     # temperature structure in radius, theta
-    plt.subplot(npltrow, npltcol,5)
-    dum = analyze.plotSlice2D(data=dat, var='dtemp', plane='xy', crd3=0.,
+    ax = axgrid[1, 1]
+    dum = analyze.plotSlice2D(data=dat, ax=ax, 
+        var='dtemp', plane='xy', crd3=0.,
         ispec=0, log=True, linunit='au', angunit='deg',
         gridcolor='r', gridalpha=1, showgrid=False,
         vmin=10.,
@@ -384,12 +391,12 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
         cllabel_fontsize=10, cllabel=True, cllabel_fmt='%d',
         lattitude=False, Sph2Cart=False, mirror=plot2dmirror)
     if (tau_r is not None) and (tau_tta is not None):
-        plt.plot(tau_r, tau_tta*180./np.pi, 'w')
-    plt.legend()
-    plt.xscale('symlog')
+        ax.plot(tau_r, tau_tta*180./np.pi, 'w')
+    ax.legend()
+    ax.set_xscale('symlog')
 
     # temperature profile
-    plt.subplot(npltrow, npltcol, 3)
+    ax = axgrid[0,2]
     # take index nearest theta=np.pi/2
     inx = np.argmin(abs(dat.grid.y - np.pi/2.))
     Tmidprof = dat.dusttemp[:,inx,0,0]
@@ -397,18 +404,18 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
     inx = np.argmin(abs(dat.grid.y - 30. * natconst.rad))
     Tatmprof = dat.dusttemp[:,inx,0,0]
 
-    plt.plot(dat.grid.x/natconst.au, Tmidprof, label='Midplane')
-    plt.plot(dat.grid.x/natconst.au, Tatmprof, label='atm')
-    Tirr = np.sqrt(parobj.ppar['rstar'][0] / 2. / dat.grid.x) * parobj.ppar['tstar'][0]
-    plt.plot(dat.grid.x/natconst.au, Tirr, label='Tirr')
-    plt.legend()
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.title('Temperature')
+    ax.plot(dat.grid.x/natconst.au, Tmidprof, label='Midplane')
+    ax.plot(dat.grid.x/natconst.au, Tatmprof, label='atm')
+    if parobj is not None:
+        Tirr = np.sqrt(parobj.ppar['rstar'][0] / 2. / dat.grid.x) * parobj.ppar['tstar'][0]
+        ax.plot(dat.grid.x/natconst.au, Tirr, label='Tirr')
+    ax.legend()
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_title('Temperature')
 
     # surface density
-    plt.subplot(npltrow, npltcol, 6)
-    ax_sig = plt.gca()
+    ax_sig = axgrid[1, 2]
     dat.getSigmaDust(idust=-1)
     phi_inx = 0
     totsigma = dat.sigmadust[:,phi_inx]
@@ -429,9 +436,14 @@ def getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, 
     ax_sig.text(0.01,0.01, 'Total Dust=%.1e Msun'%(totdmass/natconst.ms),
         va='bottom', ha='left', color='k', transform=ax_sig.transAxes)
 
-#    plt.tight_layout()
-    plt.savefig(pngname)
-    plt.close()
+    fig.tight_layout()
+    if pngname is not None:
+        fig.savefig(pngname)
+
+    if returnfig is True:
+        return fig, axgrid
+    else:
+        plt.close()
 
 def getOutput_minor(ifreq, im, optim, kpara90, korth90, kext, ylostemp, ylosdens, pngname):
     # polarization, optical depth, brightness temperature, temperature 
@@ -767,7 +779,7 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
         if im.stokes:
             axii = axgrid[ii, 0]
         else:
-            axii = axes[ii+1]
+            axii = axes[ii]
         dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet, 
             stokes='I', bunit='Tb', dpc=dis, vmin=vlim[0], vmax=vlim[1], 
             ifreq=ii, clevs=[20,40,60,80, 100], clcol='k',  
@@ -1007,11 +1019,11 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                 if xyinx is not None:
                     if (xyinx[0] == ii) and (xyinx[1] == ifreq):
                         pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                        getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname)
+                        getOutput_xy(ifreq, tau3d, dat, acclum, tdxlim, tdylim, pngname=pngname, parobj=parobj)
 
                 else:
                     pngname = rundir+'/out_xy.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
-                    getOutput_xy(ifreq, tau3d, dat, polunitlen, acclum, parobj, tdxlim, tdylim, pngname)
+                    getOutput_xy(ifreq, tau3d, dat, acclum, tdxlim, tdylim, pngname=pngname, parobj=parobj)
 
             if dooutput_minor:
                 pngname=rundir+'/out_minor.i%d.f%d.png'%(imageinc[ii],camwav[ifreq])
@@ -1063,7 +1075,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
 
 #                    if dooutput_xy:
 #                        pngname = rundir+'/out_xy.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
-#                        getOutput_xy(ifreq, tauim, tau3d, dat, polunitlen, pngname)
+#                        getOutput_xy(ifreq, tauim, tau3d, dat, pngname)
 
                     if dooutput_minor:
                         pngname=rundir+'/out_minor.i%d.f%d.b%d.png'%(imageinc[ii],camwav[ifreq], ipa)
