@@ -219,16 +219,20 @@ class radmc3dGrid(object):
 
                     # --------------------------------------------------------------------------------------------------
 
-    def makeSpatialGrid(self, crd_sys=None, ppar=None, 
+    def makeSpatialGrid(self, ppar=None, 
+            crd_sys=None, act_dim=None, 
             xbound=None, ybound=None, zbound=None, 
-            nxi=None, nyi=None, nzi=None):
+            nx=None, ny=None, nz=None ):
         """Calculates the spatial grid.
 
         Parameters
         ----------
 
-        crd_sys : {'sph','car'}
+        crd_sys : {'ppl', 'sph','car'}
                     Coordinate system of the spatial grid
+
+        act_dim : 3 element list of int
+                    whether or not to activate dimension
 
         xbound  : list
                     (with at least two elements) of boundaries for the grid along the first dimension
@@ -239,90 +243,70 @@ class radmc3dGrid(object):
         zbound  : list
                     (with at least two elements) of boundaries for the grid along the third dimension
 
-        nxi     : int
-                    Number of grid points along the first dimension. List with len(xbound)-1 elements with
-                    nxi[i] being the number of grid points between xbound[i] and xbound[i+1]
+        nx      : list of int
+                    Number of grid cells along the first dimension. List with len(xbound)-1 elements with nx[i] being the number of grid points between xbound[i] and xbound[i+1]
 
-        nyi     : int
-                    Same as nxi but for the second dimension
+        ny      : list of int
+                    Same as nx but for the second dimension
 
-        nzi     : int
-                    Same as nxi but for the third dimension
+        nz      : list of int
+                    Same as nx but for the third dimension
 
         ppar    : Dictionary containing all input parameters of the model (from the problem_params.inp file)
                    if ppar is set all keyword arguments that are not set will be taken from this dictionary
         """
 
-        self.act_dim = [1, 1, 1]
+        # read in the parameters from ppar, if they're not set explicitly here
         if ppar:
-            if not crd_sys:
-                crd_sys = ppar['crd_sys']
-            self.crd_sys = crd_sys
+            if crd_sys is None:
+                if 'crd_sys' in ppar:
+                    crd_sys = ppar['crd_sys']
 
-            if not xbound:
+            if act_dim is None:
+                if 'act_dim' in ppar:
+                    act_dim = ppar['act_dim']
+
+            if xbound is None:
                 if 'xbound' in ppar:
                     xbound = ppar['xbound']
-                else:
-                    print(' No boundary for the first dimension is given, first dimension is deactivated.')
-                    self.act_dim[0] = 0
-            if not nxi:
-                if 'nx' in ppar:
-                    if not isinstance(ppar['nx'], list):
-                        ppar['nx'] = [ppar['nx']]
-                    nxi = [i + 1 for i in ppar['nx']] # number of wall points for each interval
-                    if ppar['nx'][0] == 0:
-                        self.act_dim[0] = 0
-                else:
-                    self.act_dim[0] = 0
 
-            if not ybound:
+            if nx is None:
+                if 'nx' in ppar:
+                    nx = ppar['nx']
+
+            if ybound is None:
                 if 'ybound' in ppar:
                     ybound = ppar['ybound']
-                else:
-                    print(' No boundary for the second dimension is given, second dimension is deactivated.')
-                    self.act_dim[1] = 0
-            if not nyi:
+
+            if ny is None:
                 if 'ny' in ppar:
-                    if not isinstance(ppar['ny'], list):
-                        nyi = [ppar['ny'] + 1]
-                        ppar['ny'] = [ppar['ny']]
-                    else:
-                        ppar['ny'] = ppar['ny']
-                        nyi = [i + 1 for i in ppar['ny']]
-
-                    if ppar['ny'][0] == 0:
-                        self.act_dim[1] = 0
-                else:
-                    self.act_dim[1] = 0
-
-            if not zbound:
+                    ny = ppar['ny']
+            if zbound is None:
                 if 'zbound' in ppar:
                     zbound = ppar['zbound']
-                else:
-                    print(' No boundary for the third dimension is given, third dimension is deactivated.')
-                    self.act_dim[2] = 0
-            if not nzi:
+            if nz is None:
                 if 'nz' in ppar:
-                    if not isinstance(ppar['nz'], list):
-                        ppar['nz'] = [ppar['nz']]
-                    if ppar['nz'][0] > 0:
-                        nzi = [i + 1 for i in ppar['nz']]
-                    if ppar['nz'][0] == 0:
-                        self.act_dim[2] = 0
-                else:
-                    self.act_dim[2] = 0
-                    nzi = [0]
-        #
-        # Type checking
-        #
-        if not isinstance(nxi, list):
-            nxi = [nxi]
-        if not isinstance(nyi, list):
-            nyi = [nyi]
-        if not isinstance(nzi, list):
-            nzi = [nzi]
+                    nz = ppar['nz']
 
-        if (crd_sys == 'car') or (crd_sys=='ppl'):
+        # save information to class attributes
+        self.crd_sys = crd_sys
+        self.act_dim = act_dim
+
+        # ==== plane parallel coordinates ====
+        if crd_sys == 'ppl':
+            self.z, self.zi = getAxis(nz, zbound, 'lin')
+
+            self.x = [0]
+            self.xi = [-1e90, 1e90]
+            self.y = [0]
+            self.yi = [-1e90, 1e90]
+
+            # turn off x and y after creating all the relevant axis
+            self.act_dim[0] = 0
+            self.act_dim[1] = 0
+
+        # ==== cartesian coordinates ====
+        if crd_sys == 'car':
             #
             # First check whether the grid boundaries are specified
             #
@@ -337,268 +321,108 @@ class radmc3dGrid(object):
                 raise ValueError('Unknown zbound. Boundaries for the cartesian z-axis are not specified. '
                                  + 'Without the boundaries the grid cannot be generated')
 
-            if nxi is None:
-                raise ValueError('Unknown nxi. Number of grid points for the cartesian x-axis is not specified. '
+            if nx is None:
+                raise ValueError('Unknown nx. Number of grid points for the cartesian x-axis is not specified. '
                                  + 'The grid cannot be generated')
 
-            if nyi is None:
-                raise ValueError('Unknown nyi. Number of grid points for the cartesian y-axis is not specified. '
+            if ny is None:
+                raise ValueError('Unknown ny. Number of grid points for the cartesian y-axis is not specified. '
                                  + 'The grid cannot be generated')
 
-            if nzi is None:
-                raise ValueError('Unknown nzi. Number of grid points for the cartesian z-axis is not specified. '
+            if nz is None:
+                raise ValueError('Unknown nz. Number of grid points for the cartesian z-axis is not specified. '
                                  + 'The grid cannot be generated')
 
             #
             # Create the x-axis
             #
-            if len(nxi) > 1:
-                self.nxi = sum(nxi)
-                self.nx = self.nxi - 1
-                self.xi = xbound[0] + (xbound[1] - xbound[0]) * (
-                    np.arange(nxi[0], dtype=np.float64) / float(nxi[0]))
-                for ipart in range(1, len(nxi) - 1):
-                    dum = xbound[ipart] + (xbound[ipart + 1] - xbound[ipart]) \
-                                          * (np.arange(nxi[ipart], dtype=np.float64) / float(nxi[ipart]))
-                    self.xi = np.append(self.xi, dum)
-
-                ipart = len(nxi) - 1
-                dum = xbound[ipart] + (xbound[ipart + 1] - xbound[ipart]) * (
-                    np.arange(nxi[ipart], dtype=np.float64) / float(nxi[ipart] - 1))
-                self.xi = np.append(self.xi, dum)
-                self.x = 0.5 * (self.xi[0:self.nx] + self.xi[1:self.nx + 1])
+            if self.act_dim[1] == 1:
+                self.x, self.xi = getAxis(nx, xbound, 'lin')
             else:
-                if self.act_dim[0] == 1:
-                    self.nxi = nxi[0]
-                    self.xi = xbound[0] + (xbound[1] - xbound[0]) * (
-                        np.arange(self.nxi, dtype=np.float64) / float(self.nxi - 1.))
-                    self.nx = self.nxi - 1
-                    self.x = 0.5 * (self.xi[0:self.nx] + self.xi[1:self.nx + 1])
-                else:
-                    self.x = [0.]
-                    self.xi = [0., 0., ]
-                    self.nx = 1
-                    self.nxi = 2
+                self.x = [0.]
+                self.xi = [0., 0.]
 
-                    #
-                    # Create the y-ayis
-                    #
-            if len(nyi) > 1:
-                self.nyi = sum(nyi)
-                self.ny = self.nyi - 1
-                self.yi = ybound[0] + (ybound[1] - ybound[0]) * (
-                    np.arange(nyi[0], dtype=np.float64) / float(nyi[0]))
-                for ipart in range(1, len(nyi) - 1):
-                    dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                        np.arange(nyi[ipart], dtype=np.float64) / float(nyi[ipart]))
-                    self.yi = np.append(self.yi, dum)
-
-                ipart = len(nyi) - 1
-                dum = ybound[ipart] + (ybound[ipart + 1] - ybound[ipart]) * (
-                    np.arange(nyi[ipart], dtype=np.float64) / float(nyi[ipart] - 1))
-                self.yi = np.append(self.yi, dum)
-                self.y = 0.5 * (self.yi[0:self.ny] + self.yi[1:self.ny + 1])
+            #
+            # Create the y axis
+            #
+            if self.act_dim[1] == 1:
+                self.y, self.yi = getAxis(ny, ybound, 'lin')
             else:
-                if self.act_dim[1] == 1:
-                    self.nyi = nyi[0]
-                    self.yi = ybound[0] + (ybound[1] - ybound[0]) * (
-                        np.arange(self.nyi, dtype=np.float64) / float(self.nyi - 1.))
-                    self.ny = self.nyi - 1
-                    self.y = 0.5 * (self.yi[0:self.ny] + self.yi[1:self.ny + 1])
-                else:
-                    self.y = [0.]
-                    self.yi = [0., 0., ]
-                    self.ny = 1
-                    self.nyi = 2
+                self.y = [0.]
+                self.yi = [0., 0.]
 
-                    #
-                    # Create the z-azis
-                    #
-            if len(nzi) > 1:	# if there are portions
-                self.nzi = sum(nzi)
-                self.nz = self.nzi - 1
-                self.zi = zbound[0] + (zbound[1] - zbound[0]) * (
-                    np.arange(nzi[0], dtype=np.float64) / float(nzi[0]))
-                for ipart in range(1, len(nzi) - 1):
-                    dum = zbound[ipart] + (zbound[ipart + 1] - zbound[ipart]) \
-                                          * (np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart]))
-                    self.zi = np.append(self.zi, dum)
 
-                ipart = len(nzi) - 1
-                dum = zbound[ipart] + (zbound[ipart + 1] - zbound[ipart]) * (
-                    np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart] - 1))
-                self.zi = np.append(self.zi, dum)
-                self.z = 0.5 * (self.zi[0:self.nz] + self.zi[1:self.nz + 1])
-            else: # if only single range
-                if self.act_dim[2] == 1:
-                    self.nzi = nzi[0]
-                    self.zi = zbound[0] + (zbound[1] - zbound[0]) * (
-                        np.arange(self.nzi, dtype=np.float64) / float(self.nzi - 1.))
-                    self.nz = self.nzi - 1
-                    self.z = 0.5 * (self.zi[0:self.nz] + self.zi[1:self.nz + 1])
-                else:
-                    self.z = [0.]
-                    self.zi = [0., 0.0]
-                    self.nz = 1
-                    self.nzi = 2
+            #
+            # Create the z-azis
+            #
+            if self.act_dim[1] == 1:
+                self.z, self.zi = getAxis(nz, zbound, 'lin')
+            else:
+                self.z = [0.]
+                self.zi = [0., 0.]
 
         if crd_sys == 'sph':
             #
             # r->x, theta->y, phi-z
             #
-            if xbound is None:
-                raise ValueError('Unknown xbound. Boundaries for the spherical radial grid are not specified. '
-                                 + 'Without the boundaries the grid cannot be generated')
-
-            if ybound is None:
-                print('Unknown ybound. Setting the spherical co-lattitude grid to [0, pi]')
-                ybound = [0.0, np.pi]
-
-            if zbound is None:
-                print('Unknown zbound. Setting the spherical azimuth angle grid to [0, 2*pi]')
-                zbound = [0.0, 2.0 * np.pi]
-
-            if nxi is None:
-                raise ValueError(
-                    'Unknown nxi. Number of grid points for the spherical radial grid is not specified. '
-                    + 'The grid cannot be generated')
-
-            if nyi is None:
-                raise ValueError('Unknown nyi. Number of grid points for the spherical co-lattitude grid is not '
-                                 + ' specified. The grid cannot be generated')
-
-            if nzi is None:
-                raise ValueError('Unknown nzi. Number of grid points for the spherical azimuthal angle grid is not '
-                                 + 'specified. The grid cannot be generated')
 
             #
             # Create the x axis
             #
-            if len(nxi) > 1:
-                xi = []
-                nparts = len(nxi)
-                for ipart in range(nparts):
-                    xstart = float(xbound[ipart])
-                    xend = float(xbound[ipart + 1])
-                    xdum = xstart * (xend / xstart)**(
-                        np.arange(nxi[ipart], dtype=np.float64) / float(nxi[ipart]-1))
-                    if ipart < (nparts-1):
-                        xi.extend(xdum[:-1])
-                    else:
-                        xi.extend(xdum)
 
-                self.xi = np.array(xi)
-                self.x = np.sqrt(self.xi[1:] * self.xi[:-1])
-                self.nxi = len(self.xi)
-                self.nx = self.nxi - 1
-            else:
-                if self.act_dim[0] == 1:
-                    self.nxi = nxi[0]
-                    self.xi = xbound[0] * (xbound[1] / xbound[0]) ** (
-                        np.arange(self.nxi, dtype=np.float64) / float(self.nxi - 1.))
-                    self.nx = self.nxi - 1
-                    self.x = np.sqrt(self.xi[0:self.nx] * self.xi[1:self.nx + 1])
-                else:
-                    self.x = [0.]
-                    self.xi = [0., 0., ]
-                    self.nx = 1
-                    self.nxi = 2
+            if self.act_dim[0] == 1:
+                self.x, self.xi = getAxis(nx, xbound, 'geo')
 
-            # Refinement of the inner edge of the grid
-            # This has to be done properly
-            if ppar is not None:
-                if 'xres_nlev' in ppar:
-                    if ppar['xres_nlev'] > 0:
-                        ri_ext = np.array([self.xi[0], self.xi[ppar['xres_nspan']]])
-                        for i in range(ppar['xres_nlev']):
-                            dum_ri = ri_ext[0] + (ri_ext[1] - ri_ext[0]) * np.arange(ppar['xres_nstep'] + 1,
-                                                                                     dtype=np.float64) / float(
+                # Refinement of the inner edge of the grid
+                # This has to be done properly
+                if ppar is not None:
+                    if 'xres_nlev' in ppar:
+                        if ppar['xres_nlev'] > 0:
+                            ri_ext = np.array([self.xi[0], self.xi[ppar['xres_nspan']]])
+                            for i in range(ppar['xres_nlev']):
+                                dum_ri = ri_ext[0] + (ri_ext[1] - ri_ext[0]) * np.arange(ppar['xres_nstep'] + 1,
+
+     dtype=np.float64) / float(
                                 ppar['xres_nstep'])
-                            # print ri_ext[0:2]/au
-                            # print dum_ri/au
-                            ri_ext_old = np.array(ri_ext)
-                            ri_ext = np.array(dum_ri)
-                            ri_ext = np.append(ri_ext, ri_ext_old[2:])
+                                # print ri_ext[0:2]/au
+                                # print dum_ri/au
+                                ri_ext_old = np.array(ri_ext)
+                                ri_ext = np.array(dum_ri)
+                                ri_ext = np.append(ri_ext, ri_ext_old[2:])
 
-                        r_ext = (ri_ext[1:] + ri_ext[:-1]) * 0.5
+                            r_ext = (ri_ext[1:] + ri_ext[:-1]) * 0.5
 
-                        self.xi = np.append(ri_ext, self.xi[ppar['xres_nspan'] + 1:])
-                        self.x = np.append(r_ext, self.x[ppar['xres_nspan']:])
-                        self.nx = self.x.shape[0]
-                        self.nxi = self.xi.shape[0]
-
-                    #
-                    # Create the y axis
-                    #
-            if len(nyi) > 1:
-                yi = []
-                nparts = len(nyi)
-                for ipart in range(nparts):
-                    ystart = ybound[ipart]
-                    yend = ybound[ipart+1]
-                    ydum = ystart + (yend - ystart) * (
-                        np.arange(nyi[ipart], dtype=np.float64) / float(nyi[ipart]-1))
-                    if ipart < (nparts-1):
-                        yi.extend(ydum[:-1])
-                    else:
-                        yi.extend(ydum)
-
-                self.yi = np.array(yi)
-                self.y = 0.5 * (self.yi[1:] + self.yi[:-1])
-                self.nyi = len(self.yi)
-                self.ny = self.nyi - 1
+                            self.xi = np.append(ri_ext, self.xi[ppar['xres_nspan'] + 1:])
+                            self.x = np.append(r_ext, self.x[ppar['xres_nspan']:])
 
             else:
-                if self.act_dim[1] == 1:
-                    self.nyi = nyi[0]
-                    self.yi = ybound[0] + (ybound[1] - ybound[0]) * (
-                        np.arange(self.nyi, dtype=np.float64) / float(self.nyi - 1.))
-                    self.ny = self.nyi - 1
-                    self.y = 0.5 * (self.yi[0:self.ny] + self.yi[1:self.ny + 1])
-                else:
-                    self.y = [0.]
-                    self.yi = [0., 0., ]
-                    self.ny = 1
-                    self.nyi = 2
+                self.x = [0.]
+                self.xi = [0., 0.]
 
-                    #
-                    # Create the z axis
-            if len(nzi) > 1:
-                zi = []
-                nparts = len(nzi)
-                for ipart in range(nparts):
-                    zstart = zbound[ipart]
-                    zend = zbound[ipart+1]
-                    zdum = zstar + (zend - zstart) * (
-                        np.arange(nzi[ipart], dtype=np.float64) / float(nzi[ipart]-1))
-                    if ipart < (nparts-1):
-                        zi.extend(zdum[:-1])
-                    else:
-                        zi.extend(zdum)
-
-                self.zi = np.array(zi)
-                self.z = 0.5 * (self.zi[1:] + self.zi[:-1])
-                self.nzi = len(self.zi)
-                self.nx = self.nzi - 1
+            #
+            # Create the y axis
+            #
+            if self.act_dim[1] == 1:
+                self.y, self.yi = getAxis(ny, ybound, 'lin')
             else:
-                if self.act_dim[2] == 1:
-                    self.nzi = nzi[0]
-                    self.zi = zbound[0] + (zbound[1] - zbound[0]) * (
-                        np.arange(self.nzi, dtype=np.float64) / float(self.nzi - 1))
-                    self.nz = self.nzi - 1
-                    self.z = 0.5 * (self.zi[0:self.nz] + self.zi[1:self.nz + 1])
-                else:
-                    self.z = np.array([0.])
-                    self.zi = np.array([0., np.pi * 2.])
-                    self.nz = 1
-                    self.nzi = 2
+                self.y = [0.]
+                self.yi = [0., np.pi]
 
-        # special case: plane parallel
-        # turn off x and y after creating all the relevant axis
-        if self.crd_sys == 'ppl':
-            self.act_dim[0] = 0
-            self.act_dim[1] = 0
+            #
+            # Create the z axis
+            # 
+            if self.act_dim[2] == 1:
+                self.z, self.zi = getAxis(nz, zbound, 'lin')
+            else:
+                self.z = [0.]
+                self.zi = [0., 2*np.pi]
 
+        self.nx = len(self.x)
+        self.nxi = len(self.xi)
+        self.ny = len(self.y)
+        self.nyi = len(self.yi)
+        self.nz = len(self.z)
+        self.nzi = len(self.zi)
 
     def writeSpatialGrid(self, fname='', old=False, fdir=None):
         """Writes the wavelength grid to a file (e.g. amr_grid.inp).
@@ -903,8 +727,52 @@ class radmc3dGrid(object):
 
         return vol
 
-    @staticmethod
-    def getAxis(dum):
-        """
-        calculate an axis using the arguments. not done yet
-        """
+def getAxis(ncell, xbound, xtype):
+    """
+    calculate an axis
+
+    Parameters
+    ----------
+    ncell : list of int, or int
+        for the number of cells per interval
+    xbound : list
+        at least two elements to define wall
+    xtype : str
+            'lin' = linear 
+            'geo' = geometric
+    """
+    if not isinstance(ncell, list):
+        ncell = [ncell]
+
+    # check if the number of cells are consistent with xbound
+    if len(ncell) != (len(xbound)-1):
+        raise ValueError('number of cells should be one less than the boundaries')
+
+    nwall = [i + 1 for i in ncell]
+    totcell = np.sum(ncell)
+
+    x = np.zeros([totcell], dtype=np.float64)	# cell
+    xi = np.zeros([totcell + 1], dtype=np.float64)	# wall
+
+    # mark the first one
+    xi[0] = xbound[0]
+    istart = 1
+    for ii in range(len(nwall)):
+        if xtype == 'lin':
+            iwall = xbound[ii] + (xbound[ii+1] - xbound[ii]) * (
+                np.arange(nwall[ii], dtype=np.float64) / float(ncell[ii]))
+        elif xtype == 'geo':
+            iwall = xbound[ii] * (xbound[ii+1] / xbound[ii])**(
+                np.arange(nwall[ii], dtype=np.float64) / float(ncell[ii])) 
+        else:
+            raise ValueError('xtype can only be lin or geo')
+        xi[istart:istart+ncell[ii]] = iwall[1:]
+        istart = istart + ncell[ii]
+
+    # now calculate cells
+    if xtype == 'lin':
+        x = 0.5 * (xi[1:] + xi[:-1])
+    else:
+        x = np.sqrt(xi[1:] * xi[:-1])
+
+    return x, xi
