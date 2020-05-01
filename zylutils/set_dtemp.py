@@ -96,8 +96,9 @@ def create_grid(temp2ddir, par, par0):
     par.setPar(parlist=['ny', str(nyi), '', ''])
 
     # phi coordinate. turn off
-    zbound = [0.]
+    zbound = [0., 2*np.pi]
     nzi = [0]
+    par.setPar(parlist=['act_dim', '[1,1,0]', '', ''])
     par.setPar(parlist=['zbound', str(zbound), '', ''])
     par.setPar(parlist=['nz', str(nzi), '', ''])
 
@@ -111,7 +112,23 @@ def create_grid(temp2ddir, par, par0):
     return grid2d
 
 def create_data(temp2ddir, grid2d, grid3d, ndust):
-    # dat3d is assumed not to have mirror symmetry 
+    """
+    Create the 3d data after 2d temperature calculation is done
+
+    Parameter
+    ---------
+    temp2ddir : str
+        the directory location of the 2d temperature calculation
+
+    grid2d : radmc3dPy grid object
+        grid of the 2d temperature calculation
+
+    grid3d : radmc3dPy grid object
+        grid of the original 3d data
+
+    ndust : int
+        number of dust
+    """
 
     dat3d = data.radmc3dData(grid=grid3d)
     dat2d = data.radmc3dData(grid=grid2d)
@@ -123,7 +140,12 @@ def create_data(temp2ddir, grid2d, grid3d, ndust):
     ddens2d = np.zeros([grid2d.nx, grid2d.ny, grid2d.nz, ndust], dtype=np.float64)
 
     for ig in range(ndust):
-        ddens2d[:,:,0,ig] = np.squeeze(dat3d.rhodust[:,:grid3d.ny/2,0,ig])
+        if grid2d.ny == grid3d.ny:
+            ddens2d[:,:,0,ig] = np.squeeze(dat3d.rhodust[:,:,0,ig])
+        elif grid2d.ny == grid3d.ny/2:
+            ddens2d[:,:,0,ig] = np.squeeze(dat3d.rhodust[:,:grid3d.ny/2,0,ig])
+        else:
+            raise ValueError('Problem converting 2d grid to 3d grid')
 
     dat2d.rhodust = ddens2d
 
@@ -137,7 +159,13 @@ def create_data(temp2ddir, grid2d, grid3d, ndust):
         dat3d.readViscousHeating(binary=False, fname='heatsource.inp')
         # manipulate 2d versions
         qvis2d = np.zeros([grid2d.nx, grid2d.ny, grid2d.nz], dtype=np.float64)
-        qvis2d[:,:,0] = np.squeeze(dat3d.qvis[:,:grid3d.ny/2, 0])
+
+        if grid2d.ny == grid3d.ny:
+            qvis2d[:,:,0] = np.squeeze(dat3d.qvis[:,:,0])
+        elif grid2d.ny == grid3d.ny/2:
+            qvis2d[:,:,0] = np.squeeze(dat3d.qvis[:,:grid3d.ny/2, 0])
+        else:
+            raise ValueError('Problem converting 2d grid to 3d grid')
 
         # output the 2d data object
         dat2d.qvis = qvis2d
@@ -163,8 +191,12 @@ def reform_dat3d(dat2d, dat3d):
     temp3d = np.zeros([nx, ny, nz, ndust], dtype=np.float64)
     for ig in range(ndust):
         dtempslice = np.zeros([nx, ny], dtype=np.float64)
-        dtempslice[:,:ny/2] = np.squeeze(temp2d[:,:,0,ig])
-        dtempslice[:,ny/2:] = np.squeeze(temp2d[:,::-1,0,ig])
+
+        if ny == dat2d.grid.ny: 
+            dtempslice[:,:] = np.squeeze(temp2d[:,:,0,ig])
+        elif ny/2 == dat2d.grid.ny:
+            dtempslice[:,:ny/2] = np.squeeze(temp2d[:,:,0,ig])
+            dtempslice[:,ny/2:] = np.squeeze(temp2d[:,::-1,0,ig])
         for iz in range(nz):
             temp3d[:,:,iz, ig] = dtempslice
     dat3d.dusttemp = temp3d
@@ -174,7 +206,21 @@ def reform_dat3d(dat2d, dat3d):
     return dat3d
 
 def pipeline(dohydroeq=0, itermax=0, scatmode='1'):
-    # call all the procedure
+    """
+    call all the procedure
+    Parameter
+    ---------
+    dohydroeq : bool
+        whether or not to calculate vertical hydrostatic equilibrium.
+        Default = 0
+    itermax : int
+        number of times to iterate for hydrostatic equilibrium. 
+        Default = 0
+    scatmode : str
+        the mode for scattering. 
+        '1' : isotropic scatterin
+        Default = '1'
+    """
 
     # create a directory to store data
     temp2ddir = 'temp2d'
