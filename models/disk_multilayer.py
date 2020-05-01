@@ -71,7 +71,7 @@ def getDefaultParams():
         ['xbound', '[0.1*au, 30.*au, 110.*au, 250.*au]', 'Number of radial grid points'],
         ['ny', '[10,30, 30, 10]',
            'Number of grid points in the second dimension'],
-        ['ybound', '[5.*pi/180, 30*pi/180., pi/2., 150.*pi/180.,175.*pi/180]',
+        ['ybound', '[5.*pi/180, 60*pi/180., pi/2., 120.*pi/180.,175.*pi/180]',
            'Number of radial grid points'],
         ['nz', '[361]', 'Number of grid points in the third dimension'],
         ['zbound', '[0., 2.0*pi]', 'Number of radial grid points'],

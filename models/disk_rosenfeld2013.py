@@ -131,7 +131,7 @@ def getGasTemperature(grid=None, ppar=None):
         for ix in range(nx):
             for iy in range(ny):
                 xii = xaxis[ix] * np.sin(yaxis[iy])
-    	        zii = xaxis[ix] * abs(np.cos(yaxis[iy]))
+                zii = xaxis[ix] * abs(np.cos(yaxis[iy]))
                 rii = xaxis[ix]
                 zqii = ppar['Zq0']* ((xii / ppar['Rzq0'])**(1.3))*(np.e**(-(xii / ppar['Rzq1'])**2))
                 tmidii = ppar['T0mid'] * (xii/ppar['Rmid0'])**(-ppar['qmid'])
