@@ -330,7 +330,7 @@ class radmc3dImage(object):
 
     # --------------------------------------------------------------------------------------------------
     def writeFits(self, fname='', dpc=1., coord='03h10m05s -10d05m30s', bandwidthmhz=2000.0,
-                  casa=False, nu0=0., stokes='I', fitsheadkeys=[], ifreq=None, overwrite=False):
+                  casa=False, nu0=0., stokes='I', fitsheadkeys=[], ifreq=None, fdir=None, overwrite=False):
         """Writes out a RADMC-3D image data in fits format. 
 
         Parameters
@@ -382,6 +382,9 @@ class radmc3dImage(object):
         else:
             if fname == '':
                 fname = 'image.fits'
+
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
 
         # Decode the image center cooridnates
         # Check first whether the format is OK
@@ -3747,8 +3750,8 @@ def readTauSurf3D(fname='tausurface_3d.out'):
             'x':x, 'y':y,'z':z}
 
 def getTb(im, wav=None, freq=None, bunit='inu', rj=False, 
-    dpc=None, dxy=None, 
-    fwhm=None):
+        dpc=None, dxy=None, 
+        fwhm=None):
     """
     calculate brightness temperature based on an image
 

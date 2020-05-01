@@ -361,6 +361,7 @@ class radmc3dGrid(object):
                 self.z = [0.]
                 self.zi = [0., 0.]
 
+        # ==== spherical coordinates ====
         if crd_sys == 'sph':
             #
             # r->x, theta->y, phi-z
