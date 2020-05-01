@@ -8,14 +8,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import interpolate
 from astropy.convolution import convolve
-from radmc3dPy import *
+from radmc3dPy import image, natconst, reggrid, data, analyze, setup
 import los
 import pdb
 import fntools
 import copy
 
 from matplotlib.patches import Ellipse
-
 
 def getIm2Tb(im, wav):
     ld2 = (wav*1e-4)**2.
@@ -851,7 +850,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
     """
     dooutput_conv : bool
         to output the convolved images
-    imTblim : list
+    imlim : list
            list of two elements for vmin, vmax of output_im image
     imxlim : tuple
         x coordinate limit for image in AU
@@ -882,7 +881,8 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
     stokespref = ['I', 'Q', 'U', 'V']
 
     # inclinations for image
-    imageinc = fntools.zylreadvec(rundir + '/inp.imageinc')
+    fname = os.path.join(rundir, 'inp.imageinc')
+    imageinc = fntools.zylreadvec(fname)
     ninc = len(imageinc)
 
     # read parameter file
@@ -996,7 +996,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
         # plot images through all wavelengths
         if dooutput_wavim:
             pngname = rundir + '/out_wavim.i%d.png'%imageinc[ii]
-            getOutput_wavim(im, dis, pngname, imTblim=imTblim, imxlim=imxlim, imylim=imylim, 
+            getOutput_wavim(im, dis, pngname, imTblim=imlim, imxlim=imxlim, imylim=imylim, 
                 opltr=opltr, inc=imageinc[ii], anglim=anglim, angcmap=angcmap)
 
         # plot spectral index through all wavelengths
@@ -1060,7 +1060,7 @@ def commence(rundir, polunitlen=-2, dis=400, polmax=None,
                 # plot convolved image through all wavelengths
                 if dooutput_wavim:
                     pngname = rundir + '/out_wavim.i%d.b%d.png'%(imageinc[ii], ipa)
-                    getOutput_wavim(conv, dis, pngname, imTblim=imTblim, 
+                    getOutput_wavim(conv, dis, pngname, imTblim=imlim, 
                         imxlim=imxlim, imylim=imylim, opltr=opltr, inc=imageinc[ii], 
                         anglim=anglim, angcmap=angcmap)
 

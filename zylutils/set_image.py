@@ -80,8 +80,8 @@ def makemcImage(inc=[0., 45., 75., 90.], posang=None,
     #-----------------------------
     clock_stop = time.time()
 
-    print 'Making Image total elapsed time = '
-    print clock_stop - clock_begin
+    print('Making Image total elapsed time = ')
+    print(clock_stop - clock_begin)
     #-----------------------------
 
 def makemcSpectrum(inc=[0.], posang=None,
@@ -111,8 +111,8 @@ def makemcSpectrum(inc=[0.], posang=None,
               fname=fname)
 
     clock_stop = time.time()
-    print 'Making spectrum total elapsed time = '
-    print clock_stop - clock_begin
+    print('Making spectrum total elapsed time = ')
+    print(clock_stop - clock_begin)
 
 
 #--------------------------- line ------------------------
