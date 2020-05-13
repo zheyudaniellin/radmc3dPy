@@ -1719,28 +1719,25 @@ def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, recen=None, padnan
     if ctype3 is not None:
         if 'stokes' in ctype3.lower():
             nstokes = naxis3
-        if 'freq' in ctype3.lower():
+        elif 'freq' in ctype3.lower():
             nfreq = naxis3
             cdeltz = cdelt3
             crpixz = crpix3
             crvalz = crval3
 
-    # find the wavelength info
     if ctype4 is not None:
         if 'stokes' in ctype4.lower():
             nstokes = naxis4
-        if 'freq' in ctype4.lower():
+        elif 'freq' in ctype4.lower():
             nfreq = naxis4  
             cdeltz = cdelt4
             crpixz = crpix4
             crvalz = crval4
- 
+
     if nstokes > 1:
         isStokes = True
-    elif naxis3 == 1:
-        isStokes = False
     else:
-        raise ValueError('naxis3 has some weird value: %d' % naxis3)
+        isStokes = False
 
     # there seems to be a transpose difference
     ndim = fitsdat.shape
