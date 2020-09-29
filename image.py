@@ -1434,18 +1434,17 @@ class radmc3dImage(object):
                             imag[reg] = 0.0
                         totflux[istokes,ifreq] = np.sum(np.sum(imag))
         else:
-            if self.nfreq == 1:
-                totflux = np.zeros([1], dtype=np.float64)
-                imag = self.image[:,:,0].copy()
-                totflux[0] = np.sum(np.sum(imag))
-            else:
-                totflux = np.zeros([self.nfreq], dtype=np.float64)
-                for ifreq in range(self.nfreq):
-                    imag = self.image[:,:,ifreq].copy()
-                    if self.rms != None:
-                        reg = imag < (threshold * self.rms[ifreq])
-                        imag[reg] = 0.0
-                    totflux[ifreq] = np.sum(np.sum(imag))
+            totflux = np.zeros([self.nfreq], dtype=np.float64)
+            for ifreq in range(self.nfreq):
+                imag = self.image[:,:,ifreq].copy()
+                if self.rms != None:
+                    reg = imag < (threshold * self.rms[ifreq])
+                    imag[reg] = 0.0
+                totflux[ifreq] = np.sum(np.sum(imag))
+
+        # convert to Jy
+        totflux = totflux * self.sizepix_x * self.sizepix_y / (self.dpc * nc.pc)**2 / nc.jy
+
         self.totflux = totflux
 
 def getPSF(nx=None, ny=None, psfType='gauss', pscale=None, fwhm=None, pa=None, tdiam_prim=8.2, tdiam_sec=0.94,
@@ -2807,7 +2806,8 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
 
     return {'implot': implot, 'cbar': cbar, 'ax':ax}
 
-def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None, **kwargs):
+def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None,
+    restfreq=None, **kwargs):
     """
     Plots series of radmc3d Image using plotImage, iterating in wavelength
     Parameters
@@ -2831,16 +2831,25 @@ def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None, **kwargs):
 
     from mpl_toolkits.axes_grid1 import ImageGrid
     if chnfig is None:
-        chnfig = plt.figure()
+        chnfig = plt.figure(figsize=(4*ncol, 3*nrow))
     if chngrid is None:
         chngrid = ImageGrid(chnfig, 111, nrows_ncols=(nrows, ncols), axes_pad=0.1,
             share_all=True, cbar_location='right', cbar_mode='single',
             cbar_size='5%', cbar_pad=0.15)
 
+    # calculate velocity information
+    if restfreq is not None:
+        vel = nc.cc * (1. - image.freq / restfreq) / (1. + image.freq / restfreq)
+        veltxt = ['%.2f km/s'%(ivel/1e5) for ivel in vel]
+
     for ii in range(nwavinx):
         # plotting axes
         axii = chngrid[ii]
-        dum = plotImage(image=image, ifreq=wavinx[ii], ax=axii, nocolorbar=True, **kwargs)
+        dum = plotImage(image=image, ifreq=wavinx[ii], ax=axii, 
+            nocolorbar=True, **kwargs)
+        if restfreq is not None:
+            axii.text(0.98, 0.95, veltxt[ii], ha='right', va='top', 
+                transform=axii.transAxes, color='w')
 
     cbar = axii.cax.colorbar(dum['implot'])
 

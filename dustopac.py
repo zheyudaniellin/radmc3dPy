@@ -197,10 +197,7 @@ class radmc3dDustOpac(object):
                         fname = 'dustkappa_' + ext + '.inp'
             fnameout = fname
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fnameout = fdir + fnameout
-                else:
-                    fnameout = fdir + '/' + fnameout
+                fnameout = os.path.join(fdir, fnameout)
         else:
             fnameout = fname
 
@@ -344,10 +341,7 @@ class radmc3dDustOpac(object):
             if scatmat[i]:
                 fname = 'dustkapscatmat_' + ext[i] + '.inp'
                 if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
+                    fname = os.path.join(fdir, fname)
                 print('Reading ' + fname)
 
                 # Check the file format
@@ -491,10 +485,7 @@ class radmc3dDustOpac(object):
             if alignfact:
                 fname = 'dustkapalignfact_'+ext[i]+'.inp'
                 if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
+                    fname = os.path.join(fdir, fname)
 
                 print('Reading '+fname)
 

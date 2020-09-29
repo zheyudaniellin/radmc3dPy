@@ -49,7 +49,8 @@ from . reggrid import *
 from . molecule import *
 from . import crd_trans
 
-def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, ispec=None, vturb=False, alvec=False, qvis=False, grid=None,
+def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, ispec=None, 
+             vturb=False, alvec=False, qvis=False, bfield=False, grid=None,
              fdir=None, binary=False, old=False, octree=False):
     """Reads the physical variables of the model (e.g. density, velocity, temperature).
 
@@ -119,15 +120,17 @@ def readData(ddens=False, dtemp=False, gdens=False, gtemp=False, gvel=False, isp
     if dtemp:
         res.readDustTemp(binary=binary, fdir=fdir, old=old, octree=octree)
     if gvel:
-        res.readGasVel(binary=binary, octree=octree)
+        res.readGasVel(binary=binary, octree=octree, fdir=fdir)
     if gtemp:
-        res.readGasTemp(binary=binary, octree=octree)
+        res.readGasTemp(binary=binary, octree=octree, fdir=fdir)
     if vturb:
-        res.readVTurb(binary=binary, octree=octree)
+        res.readVTurb(binary=binary, octree=octree, fdir=fdir)
     if alvec:
         res.readDustAlign(binary=binary, fdir=fdir, octree=octree)
     if qvis:
         res.readViscousHeating(binary=binary, fdir=fdir, octree=octree)
+    if bfield:
+        res.readBfield(binary=binary, fdir=fdir, octree=octree)
     if gdens:
         if not ispec:
             raise ValueError('Unknown ispec.\n'

@@ -7,10 +7,11 @@ try:
 except:
     print('failed to import set_image.py')
 
-try:
-    from . import set_output
-except:
-    print('failed to import set_output.py')
+#try:
+#    from . import set_output
+#except:
+#    print('failed to import set_output.py')
+from . import set_output
 
 try:
     from . import set_dustspec

@@ -9,10 +9,14 @@ import numpy as np
 from scipy import interpolate
 from astropy.convolution import convolve
 from radmc3dPy import image, natconst, reggrid, data, analyze, setup
-import los
 import pdb
 import fntools
 import copy
+
+try:
+    import los
+except:
+    print('los not available')
 
 from matplotlib.patches import Ellipse
 
@@ -769,7 +773,7 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
         ncol = np.ceil(nwav / nrow)
         nrow, ncol = int(nrow), int(ncol)
 
-    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*4, nrow*3), 
+    fig, axgrid = plt.subplots(nrows=nrow, ncols=ncol, figsize=(ncol*3, nrow*3), 
         squeeze=False, sharex=True, sharey=True)
     axes = axgrid.flatten()
 
@@ -781,8 +785,9 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
             axii = axes[ii]
         dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet, 
             stokes='I', bunit='Tb', dpc=dis, vmin=vlim[0], vmax=vlim[1], 
-            ifreq=ii, clevs=[20,40,60,80, 100], clcol='k',  
-            oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
+            ifreq=ii, clevs=[20,40,60,80, 100], clcol='k',
+            oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75], 
+            titleplt='I')
         axii.set_xlim(imxlim)
         axii.set_ylim(imylim)
 
@@ -792,7 +797,8 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
             dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet,
                 stokes='PI', bunit='Tb', dpc=dis,
                 ifreq=ii,
-                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
+                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75], 
+                titleplt='PI')
             axii.set_xlim(imxlim)
             axii.set_ylim(imylim)
 
@@ -802,17 +808,20 @@ def getOutput_wavim(im, dis, pngname, imTblim=None, imxlim=None, imylim=None, op
             dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.cm.jet, 
                 stokes='P', bunit='percent', dpc=dis,
                 ifreq=ii,
-                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75])
+                oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75], 
+                titleplt='PFrac')
             axii.set_xlim(imxlim)
             axii.set_ylim(imylim)
 
         # polarization angle
         if im.stokes:
             axii = axgrid[ii,3]
-            dum = image.plotImage(ax=axii, image=im, au=True, cmap=plt.get_cmap(angcmap),
+            dum = image.plotImage(ax=axii, image=im, au=True, 
+                cmap=plt.cm.bwr, #plt.get_cmap(angcmap),
                 stokes='ang', bunit='deg', dpc=dis,
                 ifreq=ii,
                 oplotbeam='w', beamxy=[imxlim[0]*0.75, imylim[0]*0.75],
+                titleplt='PA', 
                 vmin=anglim[0], vmax=anglim[1])
             axii.set_xlim(imxlim)
             axii.set_ylim(imylim)

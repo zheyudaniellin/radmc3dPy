@@ -361,14 +361,16 @@ class radmc3dData(object):
                     data = np.fromfile(rfile, count=-1, sep=" ", dtype=np.float64)
                     if ndim == 3:
                         if data.shape[0] == hdr[1]:
-                            data = np.reshape(data, [1, self.grid.nz, self.grid.ny, self.grid.nx])
+#                            data = np.reshape(data, [1, self.grid.nz, self.grid.ny, self.grid.nx])
+                            data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, 1], order='F')
                         else:
                             msg = 'Internal inconsistency in data file, number of cell entries is different from ' \
                                   'indicated in the file header'
                             raise ValueError(msg)
                     else:
                         if data.shape[0] == hdr[1] * hdr[2]:
-                            data = np.reshape(data, [hdr[2], self.grid.nz, self.grid.ny, self.grid.nx])
+#                            data = np.reshape(data, [hdr[2], self.grid.nz, self.grid.ny, self.grid.nx])
+                            data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, hdr[2]], order='F')
                         else:
                             msg = 'Internal inconsistency in data file, number of cell entries is different from ' \
                                   'indicated in the file header'
@@ -377,8 +379,8 @@ class radmc3dData(object):
                     # data = reshape(data, [hdr[3],self.grid.nz,self.grid.ny,self.grid.nx])
                     # We need to change the axis orders as Numpy always writes binaries in C-order while RADMC-3D
                     # uses Fortran-order
-                    data = np.swapaxes(data, 0, 3)
-                    data = np.swapaxes(data, 1, 2)
+#                    data = np.swapaxes(data, 0, 3)
+#                    data = np.swapaxes(data, 1, 2)
 
         return data
 
@@ -1293,14 +1295,48 @@ class radmc3dData(object):
             data = np.fromfile(rfile, count=-1, dtype=np.float64, sep=" ")
 
             # reformat
-            data = np.reshape(data, [self.grid.radnfreq, self.grid.nz, self.grid.ny, self.grid.nx])
-            data = np.swapaxes(data, 0, 3)
-            data = np.swapaxes(data, 1, 2)
+            data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, self.grid.radnfreq], order='F')
 
-            self.radfield = np.squeeze(data)
+            # convert the units
+            self.radfield = data * 4. * np.pi / nc.cc
 
         return True
 
+    def readFluxField(self, fname='', fdir=None):
+        """ read the flux field. basically the same as mean_intensity.out, but with directions
+        """
+        if fname == '':
+            fname = 'flux_field.out'
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
+
+        with open(fname, 'r') as rfile:
+            # iformat
+            # nrcells
+            # nfreq
+            hdr = np.fromfile(rfile, count=3, dtype=np.int64, sep=" ")
+            iformat = hdr[0]
+
+            self.grid.radnfreq = hdr[2]
+            self.grid.radnwav = hdr[2]
+
+            # read frequency 
+            freq = np.fromfile(rfile, count=hdr[2], dtype=np.float64, sep=" ")
+            self.grid.radfreq = freq
+            self.grid.radwav = nc.cc * 1e4 / freq
+
+            # read the data
+            data = np.fromfile(rfile, count=-1, dtype=np.float64, sep=" ")
+
+            # reformat
+            data = np.reshape(data, [3,self.grid.nx, self.grid.ny, self.grid.nz, self.grid.radnfreq], order='F')
+
+            # want the last index to denote the direction
+            data = np.moveaxis(data, 0, -1)
+            self.fluxfield = data * 4. * np.pi / nc.cc
+
+        return True
+ 
     def writeDustDens(self, fname='', binary=False, old=False, octree=False,fdir=None):
         """Writes the dust density.
 
@@ -1476,7 +1512,7 @@ class radmc3dData(object):
         else:
             self._scalarfieldWriter(data=self.gastemp, fname=fname, binary=binary, octree=False)
 
-    def writeViscousHeating(self, fname='',binary=True, octree=False, fdir=None):
+    def writeViscousHeating(self, fname='',binary=False, octree=False, fdir=None):
         """Writes the heating 
 
         Parameters
@@ -2089,4 +2125,49 @@ class radmc3dData(object):
         # Now get the surface density
         dum = np.squeeze(mass.sum(1))
         self.sigmagas = dum / np.squeeze(surf)
+
+def integrateDataOverFrequency(dat_nu, nuCell=None, nuWall=None, phys_nu=None):
+    """
+    integrate a gridded data over frequency, used to calculate energy density
+    Parameters
+    ----------
+    dat_nu : ndarray
+        can be of any dimension, but the frequency dependence is always the last dimension
+
+    nuCell : 1d ndarray, optional 
+        frequency at the cell locations. the walls will be extrapolated
+    nuWall : 1d ndarray, optional
+        frequency at the cell walls in Hz. This is preferred, 
+    phys_nu : 1d ndarray, optional
+        a physical quantity as a function of frequency to multiple the data 
+    """
+    if (nuCell is None) & (nuWall is None):
+        raise ValueError('at least the frequency cell or wall should be given')
+    if nuWall is None:
+        nuWall = extrapolate_geo(nuCell)
+
+    dim = dat_nu.shape
+    ndim = len(dim)
+
+    nf = len(nuCell)
+    df = np.abs(np.diff(nuWall))
+
+    if ndim > 1:
+        # reshape ito a 2d array
+        ndatcells = np.prod(dim[:-1])
+        flat_dat_nu = np.reshape(dat_nu, (ndatcells, nf))
+    else:
+        flat_dat_nu = dat_nu
+
+    # integrate
+    if phys_nu is None:
+        flat_dat_sum = np.sum(flat_dat_nu * df, axis=-1)
+    else:
+        flat_dat_sum = np.sum(flat_dat_nu * phys_nu * df, axis=-1)
+
+    if ndim > 1:
+        dat_sum = np.reshape(flat_dat_sum, dim[:-1])
+    else:
+        dat_sum = flat_dat_sum
+    return dat_sum
 

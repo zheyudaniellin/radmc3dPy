@@ -358,7 +358,7 @@ class radmc3dRadSources(object):
                             wfile.write('%.9e\n' % (self.fnustar[ilam, istar]))
 
                 else:
-                    self.getStarSpectrum(ppar=ppar)
+                    self.getStarSpectrum(ppar=ppar, tstar=self.tstar, rstar=self.rstar, mstar=self.mstar)
                     for istar in range(self.nstar):
                         if self.staremis_type[istar].strip().lower() == "blackbody":
                             wfile.write('%.9e\n' % (-self.tstar[istar]))

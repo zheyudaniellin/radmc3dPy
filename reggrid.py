@@ -777,3 +777,34 @@ def getAxis(ncell, xbound, xtype):
         x = np.sqrt(xi[1:] * xi[:-1])
 
     return x, xi
+
+def extrapolate_lin(cell):
+    """
+    calculate wall coordinate based on the cell coordinates
+    this extrapolates linearly
+    """
+    ncell = len(cell)
+    nwall = ncell + 1
+    wall = np.zeros([nwall])
+    wall[1:-1] = 0.5 * (cell[:-1] + cell[1:])
+
+    # extrapolate for the first wall
+    wall[0] = wall[1] - (cell[1] - cell[0])
+    # extrapolate for the last wall
+    wall[-1] = wall[-2] + (cell[-1] - cell[-2])
+    return wall
+
+def extrapolate_geo(cell):
+    """
+    calculate the wall coordinate based on the cell coordinates
+    this extrapolates linearly
+    """
+    ncell = len(cell)
+    nwall = ncell + 1
+    wall = np.zeros([nwall])
+    wall[1:-1] = np.sqrt(cell[:-1] * cell[1:])
+
+    # extrapolate for the end points
+    wall[0] = wall[1] * (cell[1] / cell[0])**(-1)
+    wall[-1] = wall[-2] * (cell[-1] / cell[-2])
+    return wall
