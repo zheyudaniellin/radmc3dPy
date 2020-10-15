@@ -1,0 +1,11 @@
+This example directory will create a dust density distribution and a temperature distribution and also the opacity based on dsharp_opac. 
+
+Start with problem_setup.py which will create the spatial grid and structures
+Use plot_structure.py to look at the 2D distribution of temperature and density
+
+Then use problem_opacity.py to obtain the opacity information. You will need to have downloaded dsharp_opac
+Use plot_opacity.py to look at the opacity values
+
+To create images, use plot_image.py which will call radmc3d to calculate image and then read the image and produce a plot
+
+
