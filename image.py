@@ -2007,7 +2007,7 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
 
     ax.quiver(xxr, yyr, vx, vy, color=color, 
         pivot='mid', scale=1.25 * np.max([nx, ny]),
-        width=quivwidth, 
+        width=quivwidth,  
         headwidth=1e-10, headlength=1e-10, headaxislength=1e-10)
 
     # set up the text 
@@ -4050,6 +4050,7 @@ class radmc3dCircimage(object):
                                 self.image[ir, iphi, 2, inu] = float(s[2])
                                 self.image[ir, iphi, 3, inu] = float(s[3])
 
+            pdb.set_trace()
             psize = self.getPixelSize()
             conv = psize / (nc.pc**2) * 1e23
             self.imageJyppix = np.zeros((self.nr, self.nphi, self.npol, self.nfreq), dtype=np.float64)
