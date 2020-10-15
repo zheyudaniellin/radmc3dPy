@@ -19,11 +19,6 @@ from radmc3dPy import reggrid
 from radmc3dPy import setup
 from radmc3dPy import staratm
 
-try:
-    from radmc3dPy import zylutils
-except:
-    print('some dependencies for zylutils not found. Some utilities will not be available')
-
 __version__ = "0.30"
 __author__ = "Attila Juhasz"
 __copyright__ = "Copyright (C) 2011-2018 Attila Juhasz"

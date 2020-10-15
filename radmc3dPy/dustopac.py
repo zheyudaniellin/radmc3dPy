@@ -35,7 +35,6 @@ from . reggrid import *
 import warnings
 from scipy.interpolate import interp1d
 
-import fneq
 import pdb
 
 class radmc3dDustOpac(object):
@@ -745,7 +744,7 @@ class radmc3dDustOpac(object):
                         extrapolate = False
 
                     swgt = ppar['gdens'][idust]
-                    dweights = fneq.eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
+                    dweights = eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
 
                     for igs in range(ppar['ngs']):
                         o = computeDustOpacMie(fname=ppar['lnk_fname'][idust], matdens=ppar['gdens'][idust],
@@ -821,7 +820,7 @@ class radmc3dDustOpac(object):
                 gsizeinfo = []
                 dweightsinfo = []
                 avgmatdens = 1. / np.sum( np.array(ppar['mixabun']) / np.array(ppar['gdens']) )
-                dweights = fneq.eq_dustweights(gsize, avgmatdens, ppar['gsdist_powex'])
+                dweights = eq_dustweights(gsize, avgmatdens, ppar['gsdist_powex'])
                 for igs in range(ppar['ngs']):
                     if ppar['scattering_mode_max'] <= 2:
                         kaphead = 'dustkappa'
@@ -847,7 +846,7 @@ class radmc3dDustOpac(object):
 		# mix sizes first, then mix abundance
                 for idust in range(len(ppar['lnk_fname'])):
                     swgt = ppar['gdens'][idust]
-                    dweights = fneq.eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
+                    dweights = eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
                     if ppar['scattering_mode_max'] <= 2:
                         kaphead = 'dustkappa'
                         mixscatmat = False
@@ -993,7 +992,7 @@ class radmc3dDustOpac(object):
                 gsizeinfo = []
                 dweightsinfo = []
                 swgt = ppar['gdens'][0]
-                dweights = fneq.eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
+                dweights = eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
                 for igs in range(ppar['ngs']):
                     o = computeDustOpacMie(fname='opt_const.dat', matdens=ppar['gdens'][0],
                                              agraincm=gsize[igs] * 1e-4, lamcm=wav * 1e-4, theta=theta,
@@ -1043,7 +1042,7 @@ class radmc3dDustOpac(object):
 
                 if mixgsize == 1:
                     swgt = ppar['gdens'][0]
-                    dweights = fneq.eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
+                    dweights = eq_dustweights(gsize, swgt, ppar['gsdist_powex'])
                     # determining names
                     if ppar['scattering_mode_max'] <= 2:
                         kaphead = 'dustkappa'
@@ -2123,8 +2122,6 @@ class radmc3dDustOpac(object):
         #
         dum = sp.Popen('makedust', shell=True).wait()
 
-
-
 def computeDustOpacMie(fname='', matdens=None, agraincm=None, lamcm=None,
                      theta=None, logawidth=None, wfact=3.0, na=20,
                      chopforward=0.0, errtol=0.01, verbose=False,
@@ -2813,3 +2810,34 @@ def combineDustOpac(opacs, mopacs, dinfo, dweights, ext=None,
 
     return op
             
+
+def eq_dustweights(avec, swgt, plaw):
+    """
+    produces weighting for different dust sizes, per dust species
+    Parameters
+    ----------
+    avec : ndarray
+        grain size in micron 
+    """
+    navec = len(avec)
+    if navec == 1:
+        weights = np.array([1.])
+    else:
+        davec = avec[1:] - avec[:-1]
+        if 0 in davec:
+            weights = np.ones(navec) / float(navec) # assume it's all same for now
+        else:
+            mgrain = 4.0*np.pi/3. * swgt * (avec*1e-4)**3
+            mgrainw = np.zeros(navec+1)
+            mgrainw[1:-1] = (mgrain[1:]*mgrain[:-1])**0.5
+            mgrainw[0] = mgrain[0]**2 / mgrainw[1]
+            mgrainw[-1] = mgrain[-1]**2 / mgrainw[-2]
+            dmgrain = mgrainw[1:]-mgrainw[:-1]
+            bet = (plaw-2.0)/3.0
+            massdist = mgrain**bet
+            dum = np.sum(massdist*mgrain*dmgrain)
+            weights = massdist*mgrain*dmgrain / dum
+
+        return weights
+
+
