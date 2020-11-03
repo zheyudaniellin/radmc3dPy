@@ -1,9 +1,5 @@
 """This module contains a class for handling variable data in radmc-3d
 
-some bugs/fixes I did
-- when reading gas velocity, readGasVel, the np.reshape method doesn't work, since the indexing order
-  is not purely C or Fortran
-- added writeDustAlign and readDustAlign
 """
 from __future__ import absolute_import
 from __future__ import print_function
@@ -22,8 +18,8 @@ except ImportError:
 from . import natconst as nc
 from . import crd_trans
 from . dustopac import *
-from . reggrid import *
-from . octree import *
+from . reggrid import radmc3dGrid
+from . octree import radmc3dOctree
 
 class radmc3dData(object):
     """RADMC-3D data class.
@@ -115,13 +111,13 @@ class radmc3dData(object):
         self.bfield = np.zeros(0, dtype=np.float64)
         self.radfield = np.zeros(0, dtype=np.float64)
 
-    def _scalarfieldWriter(self, data=None, fname='', binary=True, octree=False):
+    def _scalarfieldWriter(self, fname, arr, binary=False):
         """Writes a scalar field to a file.
 
         Parameters
         ----------
 
-        data   : ndarray
+        arr   : ndarray
                 Scalar variable to be written
 
         fname  : str
@@ -130,85 +126,55 @@ class radmc3dData(object):
         binary : bool
                 If True the file will be in binary format, if False the file format is formatted ASCII text
 
-        octree : bool
-                If True data will be written for an octree model (data should be a 1D numpy array)
-
         """
 
         with open(fname, 'w') as wfile:
-            if binary:
-                if octree:
-                    if len(data.shape) == 1:
-                        hdr = np.array([1, 8, data.shape[0], 1], dtype=np.int64)
-                    elif len(data.shape) == 2:
-                        hdr = np.array([1, 8, data.shape[0], data.shape[1]], dtype=np.int64)
+            # octree
+            if isinstance(self.grid, radmc3dOctree):
+                # ! this part is not tested yet !
+                if len(arr.shape) == 1:
+                    if binary:
+                        hdr = np.array([1, 8, arr.shape[0], 1], dtype=np.int64)
                     else:
-                        raise ValueError('Incorrect shape. Data stored in an Octree-type grid should have 1 or 2 '
-                                         + 'dimensions, with the second dimension being the dust species. '
-                                         + ' The data to be written has a dimension of ' + ("%d" % len(data.shape))
-                                         + '\n No data has been written')
-                    hdr.tofile(wfile)
-                    data.flatten(order='f').tofile(wfile)
+                        hdr = np.array([1, arr.shape[0], 1], dtype=np.int64)
+                elif len(arr.shape) == 2:
+                    if binary:
+                        hdr = np.array([1, 8, arr.shape[0], arr.shape[1]], dtype=np.int64)
+                    else:
+                        hdr = np.array([1, arr.shape[0], arr.shape[1]], dtype=np.int64)
                 else:
-                    if len(data.shape) == 3:
-                        hdr = np.array([1, 8, self.grid.nx * self.grid.ny * self.grid.nz], dtype=np.int64)
-                        hdr.tofile(wfile)
-                    elif len(data.shape) == 4:
-                        hdr = np.array([1, 8, self.grid.nx * self.grid.ny * self.grid.nz, data.shape[3]],
-                                       dtype=np.int64)
-                        hdr.tofile(wfile)
-                    # Now we need to flatten the dust density array since the Ndarray.tofile function writes the
-                    # array always in C-order while we need Fortran-order to be written
-                    if len(data.shape) == 4:
-                        data = np.swapaxes(data, 0, 3)
-                        data = np.swapaxes(data, 1, 2)
-                        data.tofile(wfile)
-                    elif len(data.shape) == 3:
-                        data = np.swapaxes(data, 0, 2)
-                        data.tofile(wfile)
+                    raise ValueError('Incorrect shape. Data stored in an Octree-type grid should have 1 or 2 '
+                                     + 'dimensions, with the second dimension being the dust species. '
+                                     + ' The data to be written has a dimension of ' + ("%d" % len(arr.shape))
+                                     + '\n No data has been written')
+            else: # regular grid
+                # determine header
+                if len(arr.shape) == 3:
+                    if binary:
+                        hdr = np.array([1, 8, self.grid.nx * self.grid.ny * self.grid.nz], dtype=int)
                     else:
-                        raise ValueError('Incorrect shape. Data stored in a regular grid should have 3 or 4 dimensions'
-                                         + ' with the fourth dimension being the dust species. '
-                                         + ' The data to be written has a dimension of ' + ("%d" % len(data.shape))
-                                         + '\n No data has been written')
-            else:
-                if octree:
-                    if len(data.shape) == 1:
-                        hdr = np.array([1, data.shape[0], 1], dtype=np.int64)
-                    elif len(data.shape) == 2:
-                        hdr = np.array([1, data.shape[0], data.shape[1]], dtype=np.int64)
-                    else:
-                        raise ValueError('Incorrect shape. Data stored in an Octree-type grid should have 1 or 2 '
-                                         + 'dimensions, with the second dimension being the dust species. '
-                                         + ' The data to be written has a dimension of ' + ("%d" % len(data.shape))
-                                         + '\n No data has been written')
-
-                    hdr.tofile(wfile, sep=" ", format="%d\n")
-                    data.flatten(order='f').tofile(wfile, sep=" ", format="%.9e\n")
-                else:
-                    if len(data.shape) == 3:
                         hdr = np.array([1, self.grid.nx * self.grid.ny * self.grid.nz], dtype=int)
-                        hdr.tofile(wfile, sep=" ", format="%d\n")
-                        # Now we need to flatten the dust density array since the Ndarray.tofile function writes the
-                        # array always in C-order while we need Fortran-order to be written
-                        data = np.swapaxes(data, 0, 2)
-                        data.tofile(wfile, sep=" ", format="%.9e\n")
-
-                    elif len(data.shape) == 4:
-                        hdr = np.array([1, self.grid.nx * self.grid.ny * self.grid.nz, data.shape[3]], dtype=int)
-                        hdr.tofile(wfile, sep=" ", format="%d\n")
-                        # Now we need to flatten the dust density array since the Ndarray.tofile function writes the
-                        # array always in C-order while we need Fortran-order to be written
-                        data = np.swapaxes(data, 0, 3)
-                        data = np.swapaxes(data, 1, 2)
-                        data.tofile(wfile, sep=" ", format="%.9e\n")
+                elif len(arr.shape) == 4:
+                    if binary:
+                        hdr = np.array([1, 8, self.grid.nx * self.grid.ny * self.grid.nz, arr.shape[3]], dtype=int)
                     else:
-                        raise ValueError('Incorrect shape. Data stored in a regular grid should have 3 or 4 dimensions'
+                        hdr = np.array([1, self.grid.nx * self.grid.ny * self.grid.nz, arr.shape[3]], dtype=int)
+                else:
+                    raise ValueError('Incorrect shape. Data stored in a regular grid should have 3 or 4 dimensions'
                                          + ' with the fourth dimension being the dust species. '
-                                         + ' The data to be written has a dimension of ' + ("%d" % len(data.shape))
+                                         + ' The data to be written has a dimension of ' + ("%d" % len(arr.shape))
                                          + '\n No data has been written')
 
-    def _scalarfieldReader(self, fname='', binary=True, octree=False, ndim=3):
+            # write out header and data
+            if binary:
+                hdr.tofile(wfile)
+                arr.flatten(order='f').tofile(wfile)
+            else:
+                hdr.tofile(wfile, sep="\n", format="%d")
+                wfile.write('\n')
+                arr.flatten(order='f').tofile(wfile, sep="\n", format="%.9e")
+
+    def _scalarfieldReader(self, fname='', binary=False, octree=False, ndim=3):
         """Reads a scalar field from file.
 
         Parameters
@@ -383,6 +349,179 @@ class radmc3dData(object):
 #                    data = np.swapaxes(data, 1, 2)
 
         return data
+
+    def _vectorfieldWriter(self, fname, arr, binary=False, ndim=3):
+        """
+        Parameters
+        ----------
+        fname : str
+            name of the output file
+        arr : ndarray 
+            vector field
+        binary : bool
+            binary file or not
+        ndim : int
+            if only depends spatially : ndim = 3
+            if also depends on a fourth parameter : ndim = 4
+        """
+        with open(fname, 'w') as wfile:
+            # octree
+            if isinstance(self.grid, radmc3dOctree):
+                # ! this is not tested yet !
+                # determine header information 
+                if len(arr.shape) == 1:
+                    if binary:
+                        hdr = np.array([1, 8, arr.shape[0], 1], dtype=np.int64)
+                    else:
+                        hdr = np.array([1, arr.shape[0], 1], dtype=np.int64)
+                elif len(arr.shape) == 2:
+                    if binary:
+                        hdr = np.array([1, 8, arr.shape[0], arr.shape[1]], dtype=np.int64)
+                    else:
+                        hdr = np.array([1, arr.shape[0], arr.shapre[1]], dtype=np.int64)
+                else:
+                    raise ValueError('Incorrect shape. Data stored in an Octree-type grid should have 1 or 2 '
+                                     + 'dimensions, with the second dimension being the dust species. '
+                                     + ' The data to be written has a dimension of ' + ("%d" % len(arr.shape))
+                                     + '\n No data has been written')
+                # write header and data 
+                if binary:
+                    hdr.tofile(wfile)
+                    arr.flatten(order='f').tofile(wfile)
+
+                else:
+                    hdr.tofile(wfile, sep=" ", format="%d\n")
+                    arr.flatten(order='f').tofile(wfile, sep=" ", format="%.9e\n")                    
+
+            else: # regular grid
+                # determine header information 
+                nrcells = self.grid.nx * self.grid.ny * self.grid.nz
+                if binary:
+                    if ndim == 3:
+                        hdr = np.array([1, 8, nrcells], dtype=np.int64)
+                    elif ndim == 4:
+                        hdr = np.array([1, 8, nrcells, arr.shape[3]], dtype=np.int64)
+                    else:
+                        raise ValueError('Incorrect shape')
+                else:
+                    if ndim == 3:
+                        hdr = np.array([1, nrcells], dtype=np.int64)
+                    elif ndim == 4:
+                        hdr = np.array([1, nrcells, arr.shape[3]], dtype=np.int64)
+                    else:
+                        raise ValueError('Incorrect shape')
+
+                # make the first index to denote the direction
+                arr = np.moveaxis(arr, -1, 0)
+
+                # write header and data 
+                if binary:
+                    hdr.tofile(wfile)
+                    arr.flatten(order='f').tofile(wfile)
+                else:
+                    hdr.tofile(wfile, sep="\n", format='%d')
+                    wfile.write('\n')
+                    arr = np.reshape(arr, [3, np.prod(arr.shape[1:])], order='f')
+                    np.savetxt(wfile, arr.T, fmt='%.9e')
+
+    def _vectorfieldReader(self, fname, binary=False, ndim=3):
+        """ read ordingary vector field data 
+
+        Parameters
+        ----------
+        fname : str
+            name of the file
+        binary : bool
+            binary file or not
+
+        Returns
+        -------
+        arr : ndarray 
+        """
+        # begin reading
+        with open(fname, 'r') as rfile:
+            # if we have an octree grid
+            if isinstance(self.grid, radmc3dOctree):
+                # ! this part is not tested yet !
+                # read header information 
+                if binary:
+                    hdr = np.fromfile(rfile, count=3, dtype=np.int64)
+                    iformat = hdr[0]
+                    precis = hdr[1]
+                    nLeaf = hdr[2]
+                    if precis == 4:
+                        dtype = np.float32
+                    else:
+                        dtype = np.float64
+                else:
+                    hdr = np.fromfile(rfile, count=2, dtype=np.int64)
+                    iformat = hdr[0]
+                    nLeaf = hdr[1]
+                    dtype = np.float64
+
+                if self.grid.nLeaf != nLeaf:
+                    raise ValueError('Number of cells in ' + fname + ' is different from that in amr_grid.inp'
+                                             + ' nr cells in ' + fname + ' : ' + ("%d" % nLeaf) + '\n '
+                                             + ' nr of cells in amr_grid.inp : '
+                                             + ("%d" % self.grid.nLeaf))
+
+                # read data 
+                if binary:
+                    arr = np.fromfile(rfile, count=-1, sep='', dtype=dtype)
+                else:
+                    arr = np.fromfile(rfile, count=-1, sep=' ', dtype=dtype)
+
+                arr = np.reshape(arr, [self.nLeaf, 3], order='F')
+
+            else: # regular grid
+                # read the header information 
+                if binary:
+                    if ndim == 3:
+                        cnt = 3
+                    else:
+                        cnt = 4
+                    hdr = np.fromfile(rfile, count=cnt, sep='', dtype=np.int64)
+                    iformat = hdr[0]
+                    precis = hdr[1]
+                    nrcells = hdr[2]
+                    if ndim == 4:
+                        ndust = hdr[3]
+
+                    if precis == 4:
+                        dtype = np.float32
+                    else:
+                        dtype = np.float64
+                else:
+                    if ndim == 3:
+                        cnt = 2
+                    else:
+                        cnt = 3
+
+                    hdr = np.fromfile(rfile, count=cnt, sep=" ", dtype=np.int64)
+                    iformat = hdr[0]
+                    nrcells = hdr[1]
+                    if ndim == 4:
+                        ndust = hdr[2]
+
+                    dtype = np.float64
+
+                # read data 
+                if binary:
+                    arr = np.fromfile(rfile, count=-1, sep='', dtype=dtype)
+                else:
+                    arr = np.fromfile(rfile, count=-1, sep=' ', dtype=dtype)
+
+                # first reconstruct the array 
+                if ndim == 3:
+                    dim = [3,self.grid.nx, self.grid.ny, self.grid.nz]
+                else:
+                    dim = [3,self.grid.nx, self.grid.ny, self.grid.nz, ndust]
+                arr = np.reshape(arr, dim, order='f')
+
+                # want the last index to denote the direction
+                arr = np.moveaxis(arr, 0, -1)
+
+        return arr 
 
     def getTauOneDust(self, idust=0, axis='', kappa=0.):
         """Calculates the optical depth of a single dust species along any given combination of the axes.
@@ -644,16 +783,14 @@ class radmc3dData(object):
         #
         if not old:
 
-            if binary:
-                if fname == '':
+            if fname == '':
+                if binary:
                     fname = 'dust_density.binp'
-                if fdir is not None:
-                    fname = fdir + '/' + fname
-            else:
-                if fname == '':
+                else:
                     fname = 'dust_density.inp'
-                if fdir is not None:
-                    fname = fdir + '/' + fname
+
+            if fdir is not None:
+                fname = os.path.join(fdir, fname)
 
             print('Reading '+fname)
             self.rhodust = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=4)
@@ -671,8 +808,6 @@ class radmc3dData(object):
             self.rhodust = np.zeros([hdr[1], hdr[2]*2, 1, hdr[0]], dtype=np.float64)
             self.rhodust[:, :hdr[2], 0, :] = data[:, :, 0, :]
             self.rhodust[:, hdr[2]:, 0, :] = data[:, ::-1, 0, :]
-
-        return True
 
     def readDustTemp(self, fname='', fdir=None, binary=False, octree=False, old=False):
         """Reads the dust temperature.
@@ -734,7 +869,21 @@ class radmc3dData(object):
                 self.dusttemp[:, :hdr[2], 0, idust] = np.reshape(data[:ncell], [hdr[1], hdr[2]])
             self.dusttemp[:, hdr[2]:, 0, :] = self.dusttemp[:, :hdr[2], 0, :][:, ::-1, :]
 
-        return True
+    def readGasDens(self, fname='', fdir=None, binary=False):
+        """ read the gas density 
+        """
+        
+        if fname == '':
+            if binary:
+                fname = 'gas_density.binp'
+            else:
+                fname = 'gas_density.inp'
+
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
+
+        print('Reading '+fname)
+        self.rhogas = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
 
     def readGasVel(self, fname='', fdir=None, binary=False, octree=False):
         """Reads the gas velocity.
@@ -855,7 +1004,7 @@ class radmc3dData(object):
 
         return True
 
-    def readDustAlign(self, fname='', fdir=None, binary=False, octree=False):
+    def readDustAlign(self, fname='', fdir=None, binary=False):
         """Reads the Dust Alignment.
 
         Parameters
@@ -871,110 +1020,19 @@ class radmc3dData(object):
         octree  : bool, optional
                   If the data is defined on an octree-like AMR
         """
-        if self.grid is None:
-            if octree:
-                self.grid = radmc3dOctree()
-            else:
-                self.grid = radmc3dGrid()
-                self.grid.readGrid(old=False)
-
-        if binary:
-            if fname == '':
+        # determine default file name
+        if fname == '':
+            if binary:
                 fname = 'grainalign_dir.binp'
-
-            print('Reading '+fname)
-            if os.path.isfile(fname):
-                # If we have an octree grid
-                with open(fname, 'r') as rfile:
-                    if isinstance(self.grid, radmc3dOctree):
-                        hdr = np.fromfile(rfile, count=3, dtype=np.int64)
-                        if hdr[2] != self.grid.nLeaf:
-                            raise ValueError('Number of cells in ' + fname + ' is different from that in amr_grid.inp'
-                                             + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[2]) + '\n '
-                                             + ' nr of cells in amr_grid.inp : '
-                                             + ("%d" % self.grid.nLeaf))
-
-                        if hdr[1] == 8:
-                            self.alvec = np.fromfile(rfile, count=-1, dtype=np.float64)
-                        elif hdr[1] == 4:
-                            self.alvec = np.fromfile(rfile, count=-1, dtype=np.float32)
-                        else:
-                            raise TypeError(
-                                'Unknown datatype/precision in ' + fname + '. RADMC-3D binary files store 4 byte '
-                                + 'floats or 8 byte doubles. The precision in the file header is '
-                                + ("%d" % hdr[1]))
-                        self.alvec = np.reshape(self.alvec, [self.nLeaf, 3], order='f')
-
-                    else:
-                        hdr = np.fromfile(rfile, count=3, dtype=np.int64)
-                        if hdr[2] != self.grid.nx * self.grid.ny * self.grid.nz:
-                            raise ValueError('Number of grid cells in ' + fname + ' is different from that in amr_grid.inp '
-                                             + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[2]) + '\n '
-                                             + ' nr of cells in amr_grid.inp : '
-                                             + ("%d" % (self.grid.nx * self.grid.ny * self.grid.nz)))
-
-                        if hdr[1] == 8:
-                            self.alvec = np.fromfile(rfile, count=-1, dtype=np.float64)
-                        elif hdr[1] == 4:
-                            self.alvec = np.fromfile(rfile, count=-1, dtype=float)
-                        else:
-                            raise TypeError(
-                                'Unknown datatype/precision in ' + fname + '. RADMC-3D binary files store 4 byte '
-                                + 'floats or 8 byte doubles. The precision in the file header is '
-                                + ("%d" % hdr[1]))
-                        self.alvec = np.reshape(self.alvec, [self.grid.nz, self.grid.ny, self.grid.nx, 3])
-                        self.alvec = np.swapaxes(self.alvec, 0, 2)
             else:
-                raise FileNotFoundError(fname + 'was not found')
-
-        else:
-
-            if fname == '':
                 fname = 'grainalign_dir.inp'
 
-            if fdir is not None:
-                fname = fdir + '/' + fname
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
 
-            if os.path.isfile(fname):
+        self.alvec = self._vectorfieldReader(fname, binary=binary, ndim=4)
 
-                print('Reading ' + fname)
-                with open(fname, 'r') as rfile:
-                    # Two element header 1 - iformat, 2 - Nr of cells
-                    hdr = np.fromfile(rfile, count=2, sep=" ", dtype=np.float64)
-                    #hdr = np.array(data[:2], dtype=np.int64)
-                    if octree:
-                        if self.grid.nLeaf != hdr[1]:
-                            msg = 'Number of cells in ' + fname + ' is different from that in amr_grid.inp'\
-                                  + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[1]) + '\n '\
-                                  + ' nr of cells in amr_grid.inp : ' +  ("%d" % self.grid.nLeaf)
-                            raise RuntimeError(msg)
-                        data = np.fromfile(rfile, count=-1, sep=" ", dtype=np.float64)
-                        self.alvec = np.reshape(data, [hdr[1], 3])
-                    else:
-                        if (self.grid.nx * self.grid.ny * self.grid.nz) != hdr[1]:
-                            msg = 'Number of grid cells in ' + fname + ' is different from that in amr_grid.inp ' \
-                                  + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[1]) + '\n '\
-                                  + ' nr of cells in amr_grid.inp : '\
-                                  + ("%d" % (self.grid.nx * self.grid.ny * self.grid.nz))
-                            raise RuntimeError(msg)
-                        data = np.fromfile(rfile, count=-1, sep=" ", dtype=np.float64)
-# the reshape method doesn't work
-#                        self.alvec = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, 3])
-                        self.alvec = np.zeros([self.grid.nx, self.grid.ny, self.grid.nz, 3], dtype=np.float64)
-                        ik = 0
-                        for iz in range(self.grid.nz):
-                            for iy in range(self.grid.ny):
-                                for ix in range(self.grid.nx):
-                                    for iv in range(3):
-                                        self.alvec[ix,iy,iz,iv] = data[ik]
-                                        ik = ik + 1
-
-            else:
-                raise FileNotFoundError(fname + 'was not found')
-
-        return True
-
-    def readBfield(self, fname='', fdir=None, binary=False, octree=False):
+    def readBfield(self, fname='', fdir=None, binary=False):
         """Reads the magnetic field
 
         Parameters
@@ -987,10 +1045,8 @@ class radmc3dData(object):
         binary : bool
                 If true the data will be read in binary format, otherwise the file format is ascii
 
-        octree  : bool, optional
-                  If the data is defined on an octree-like AMR
         """
-
+        # check if grid exists 
         if self.grid is None:
             if octree:
                 self.grid = radmc3dOctree()
@@ -998,100 +1054,18 @@ class radmc3dData(object):
                 self.grid = radmc3dGrid()
                 self.grid.readGrid(old=False)
 
-        if binary:
-            if fname == '':
+        # determine default file name
+        if fname == '':
+            if binary:
                 fname = 'Bfield.binp'
-
-            print('Reading '+fname)
-            if os.path.isfile(fname):
-                # If we have an octree grid
-                with open(fname, 'r') as rfile:
-                    if isinstance(self.grid, radmc3dOctree):
-                        hdr = np.fromfile(rfile, count=3, dtype=np.int64)
-                        if hdr[2] != self.grid.nLeaf:
-                            raise ValueError('Number of cells in ' + fname + ' is different from that in amr_grid.inp'
-                                             + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[2]) + '\n '
-                                             + ' nr of cells in amr_grid.inp : '
-                                             + ("%d" % self.grid.nLeaf))
-
-                        if hdr[1] == 8:
-                            self.bfield = np.fromfile(rfile, count=-1, dtype=np.float64)
-                        elif hdr[1] == 4:
-                            self.bfield = np.fromfile(rfile, count=-1, dtype=np.float32)
-                        else:
-                            raise TypeError(
-                                'Unknown datatype/precision in ' + fname + '. RADMC-3D binary files store 4 byte '
-                                + 'floats or 8 byte doubles. The precision in the file header is '
-                                + ("%d" % hdr[1]))
-                        self.bfield = np.reshape(self.bfield, [self.nLeaf, 3], order='f')
-
-                    else:
-                        hdr = np.fromfile(rfile, count=3, dtype=np.int64)
-                        if hdr[2] != self.grid.nx * self.grid.ny * self.grid.nz:
-                            raise ValueError('Number of grid cells in ' + fname + ' is different from that in amr_grid.inp '
-                                             + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[2]) + '\n '
-                                             + ' nr of cells in amr_grid.inp : '
-                                             + ("%d" % (self.grid.nx * self.grid.ny * self.grid.nz)))
-
-                        if hdr[1] == 8:
-                            self.bfield = np.fromfile(rfile, count=-1, dtype=np.float64)
-                        elif hdr[1] == 4:
-                            self.bfield = np.fromfile(rfile, count=-1, dtype=float)
-                        else:
-                            raise TypeError(
-                                'Unknown datatype/precision in ' + fname + '. RADMC-3D binary files store 4 byte '
-                                + 'floats or 8 byte doubles. The precision in the file header is '
-                                + ("%d" % hdr[1]))
-                        self.bfield = np.reshape(self.bfield, [self.grid.nz, self.grid.ny, self.grid.nx, 3])
-                        self.bfield = np.swapaxes(self.bfield, 0, 2)
             else:
-                raise FileNotFoundError(fname + 'was not found')
-
-        else:
-
-            if fname == '':
                 fname = 'Bfield.inp'
-            if fdir is not None:
-                fname = fdir + '/' + fname
 
-            if os.path.isfile(fname):
+        # add on fdir
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
 
-                print('Reading ' + fname)
-                with open(fname, 'r') as rfile:
-                    # Two element header 1 - iformat, 2 - Nr of cells
-                    hdr = np.fromfile(rfile, count=2, sep=" ", dtype=np.float64)
-                    #hdr = np.array(data[:2], dtype=np.int64)
-                    if octree:
-                        if self.grid.nLeaf != hdr[1]:
-                            msg = 'Number of cells in ' + fname + ' is different from that in amr_grid.inp'\
-                                  + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[1]) + '\n '\
-                                  + ' nr of cells in amr_grid.inp : ' +  ("%d" % self.grid.nLeaf)
-                            raise RuntimeError(msg)
-                        data = np.fromfile(rfile, count=-1, sep=" ", dtype=np.float64)
-                        self.bfield = np.reshape(data, [hdr[1], 3])
-                    else:
-                        if (self.grid.nx * self.grid.ny * self.grid.nz) != hdr[1]:
-                            msg = 'Number of grid cells in ' + fname + ' is different from that in amr_grid.inp ' \
-                                  + ' nr cells in ' + fname + ' : ' + ("%d" % hdr[1]) + '\n '\
-                                  + ' nr of cells in amr_grid.inp : '\
-                                  + ("%d" % (self.grid.nx * self.grid.ny * self.grid.nz))
-                            raise RuntimeError(msg)
-                        data = np.fromfile(rfile, count=-1, sep=" ", dtype=np.float64)
-# the reshape method doesn't work
-#                        self.bfield = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, 3])
-                        self.bfield = np.zeros([self.grid.nx, self.grid.ny, self.grid.nz, 3], dtype=np.float64)
-                        ik = 0
-                        for iz in range(self.grid.nz):
-                            for iy in range(self.grid.ny):
-                                for ix in range(self.grid.nx):
-                                    for iv in range(3):
-                                        self.bfield[ix,iy,iz,iv] = data[ik]
-                                        ik = ik + 1
-
-            else:
-                raise FileNotFoundError(fname + 'was not found')
-
-        return True
+        self.bfield = self._vectorfieldReader(fname, binary=binary, ndim=3)
 
     def readVTurb(self, fname='', fdir=None, binary=True, octree=False):
         """Reads the turbulent velocity field.
@@ -1268,75 +1242,121 @@ class radmc3dData(object):
         tot_lum = lum.sum()
         return tot_lum
  
-    def readRadiationField(self, fname='', fdir=None):
+    def readRadiationField(self, fname='', fdir=None, binary=False):
         """ read the radiation field
         """
         if fname == '':
-            fname = 'mean_intensity.out'
+            if binary:
+                fname = 'mean_intensity.bout'
+            else:
+                fname = 'mean_intensity.out'
+
         if fdir is not None:
             fname = os.path.join(fdir, fname)
 
         with open(fname, 'r') as rfile:
-            # iformat
-            # nrcells
-            # nfreq
-            hdr = np.fromfile(rfile, count=3, dtype=np.int64, sep=" ")
-            iformat = hdr[0]
+            # read header 
+            if binary:
+                # iformat, precision, nrcells, nfreq
+                hdr = np.fromfile(rfile, count=4, dtype=np.int64, sep='')
+                iformat = hdr[0] 
+                precis = hdr[1]
+                nrcells = hdr[2]
+                self.grid.radnfreq = hdr[3]
+                if precis == 4:
+                    dtype = np.float32
+                else:
+                    dtype = np.float64
+            else:
+                # iformat, nrcells, nfreq
+                hdr = np.fromfile(rfile, count=3, dtype=np.int64, sep=' ')
+                iformat = hdr[0]
+                nrcells = hdr[1]
+                self.grid.radnfreq = hdr[2]
+                dtype = np.float64
 
-            self.grid.radnfreq = hdr[2]
-            self.grid.radnwav = hdr[2]
- 
+            self.grid.radnwav = self.grid.radnfreq
+
             # read frequency 
-            freq = np.fromfile(rfile, count=hdr[2], dtype=np.float64, sep=" ")
+            if binary:
+                freq = np.fromfile(rfile, count=self.grid.radnfreq, dtype=dtype, sep='')
+            else:
+                freq = np.fromfile(rfile, count=self.grid.radnfreq, dtype=dtype, sep=' ')
+
             self.grid.radfreq = freq
             self.grid.radwav = nc.cc * 1e4 / freq           
  
             # read data
-            data = np.fromfile(rfile, count=-1, dtype=np.float64, sep=" ")
+            if binary:
+                data = np.fromfile(rfile, count=-1, dtype=dtype, sep='')
+            else:
+                data = np.fromfile(rfile, count=-1, dtype=np.float64, sep=' ')
 
             # reformat
             data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, self.grid.radnfreq], order='F')
 
-            # convert the units
-            self.radfield = data * 4. * np.pi / nc.cc
+        self.radfield = data
 
-        return True
-
-    def readFluxField(self, fname='', fdir=None):
+    def readFluxField(self, fname='', fdir=None, binary=False):
         """ read the flux field. basically the same as mean_intensity.out, but with directions
         """
         if fname == '':
-            fname = 'flux_field.out'
+            if binary:
+                fname = 'flux_field.bout'
+            else:
+                fname = 'flux_field.out'
         if fdir is not None:
             fname = os.path.join(fdir, fname)
 
-        with open(fname, 'r') as rfile:
-            # iformat
-            # nrcells
-            # nfreq
-            hdr = np.fromfile(rfile, count=3, dtype=np.int64, sep=" ")
-            iformat = hdr[0]
+        if isinstance(self.grid, radmc3dOctree):
+            raise ValueError('octree for readfluxfield not implemented yet')
 
-            self.grid.radnfreq = hdr[2]
-            self.grid.radnwav = hdr[2]
+        with open(fname, 'r') as rfile:
+            if binary:
+                # iformat, precision, nrcells, nfreq
+                hdr = np.fromfile(rfile, count=4, dtype=np.int64, sep='')
+                iformat = hdr[0]
+                precis = hdr[1]
+                nrcells = hdr[2]
+                self.grid.radnfreq = hdr[3]
+                if precis == 4:
+                    dtype = np.float32
+                else:
+                    dtype = np.float64
+
+            else:
+                # iformat, nrcells, nfreq
+                hdr = np.fromfile(rfile, count=3, dtype=np.int64, sep=sep)
+                iformat = hdr[0]
+                nrcells = hdr[1]
+                self.grid.radnfreq = hdr[2]
+                dtype = np.float64
+
+            self.grid.radnwav = self.grid.radnfreq
 
             # read frequency 
-            freq = np.fromfile(rfile, count=hdr[2], dtype=np.float64, sep=" ")
+            if binary:
+                freq = np.fromfile(rfile, count=self.grid.radnfreq, dtype=dtype, sep='')
+            else:
+                freq = np.fromfile(rfile, count=self.grid.radnfreq, dtype=dtype, sep=' ')
+
             self.grid.radfreq = freq
             self.grid.radwav = nc.cc * 1e4 / freq
 
-            # read the data
-            data = np.fromfile(rfile, count=-1, dtype=np.float64, sep=" ")
+            # read data
+            if binary:
+                data = np.fromfile(rfile, count=-1, dtype=dtype, sep='')
+            else:
+                data = np.fromfile(rfile, count=-1, dtype=dtype, sep=' ')
 
             # reformat
             data = np.reshape(data, [3,self.grid.nx, self.grid.ny, self.grid.nz, self.grid.radnfreq], order='F')
 
             # want the last index to denote the direction
             data = np.moveaxis(data, 0, -1)
-            self.fluxfield = data * 4. * np.pi / nc.cc
 
-        return True
- 
+        self.fluxfield = data 
+
     def writeDustDens(self, fname='', binary=False, old=False, octree=False,fdir=None):
         """Writes the dust density.
 
@@ -1377,7 +1397,7 @@ class radmc3dData(object):
                 self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.rhodust), fname=fname, binary=binary,
                                         octree=True)
             else:
-                self._scalarfieldWriter(data=self.rhodust, fname=fname, binary=binary, octree=False)
+                self._scalarfieldWriter(fname, self.rhodust, binary=binary)
 
         #
         # Write dust density for the previous 2D version of the code
@@ -1431,9 +1451,9 @@ class radmc3dData(object):
             self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.dusttemp), fname=fname, binary=binary,
                                     octree=True)
         else:
-            self._scalarfieldWriter(data=self.dusttemp, fname=fname, binary=binary, octree=False)
+            self._scalarfieldWriter(fname, self.dusttemp, binary=binary)
 
-    def writeGasDens(self, fname='', ispec='', binary=True, octree=False, fdir=None):
+    def writeGasDens(self, fname='', ispec='', binary=True, fdir=None):
         """Writes the gas density.
 
         Parameters
@@ -1451,31 +1471,28 @@ class radmc3dData(object):
         binary  : bool
                   If true the data will be written in binary format, otherwise the file format is ascii
 
-        octree  : bool, optional
-                  If the data is defined on an octree-like AMR
         """
+        # specify the species
         if ispec == '':
             raise ValueError('Unknown ispec. Without knowing the name of the gas species the gas density '
                              + 'cannot be written, as the filename "numberdens_ispec.inp" cannot be generated.')
-        else:
-            if fname == '':
-                if binary:
-                    fname = 'numberdens_' + ispec + '.binp'
-                else:
-                    fname = 'numberdens_' + ispec + '.inp'
-                if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
 
-            print('Writing ' + fname)
-#            tot_gas = self.getGasMass(rhogas=True)
-            if octree:
-                self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.ndens_mol), fname=fname, binary=binary,
-                                        octree=True)
+        # determine a default file name
+        if fname == '':
+            fname = 'numberdens_%s'%ispec
+            if binary:
+                fname += '.binp'
             else:
-                self._scalarfieldWriter(data=self.ndens_mol, fname=fname, binary=binary, octree=False)
+                fname += '.inp'
+
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
+
+        print('Writing ' + fname)
+        if isinstance(self.grid, radmc3dOctree):
+            self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.ndens_mol), fname=fname, binary=binary)
+        else:
+            self._scalarfieldWriter(data=self.ndens_mol, fname=fname, binary=binary)
 
     def writeGasTemp(self, fname='', binary=True, octree=False, fdir=None):
         """Writes the gas temperature.
@@ -1545,7 +1562,6 @@ class radmc3dData(object):
                                     octree=True)
         else:
             self._scalarfieldWriter(data=self.qvis, fname=fname, binary=binary, octree=False)
-
 
     def writeGasVel(self, fname='', binary=False, octree=False, fdir=None):
         """Writes the gas velocity.
@@ -1643,8 +1659,8 @@ class radmc3dData(object):
                                 wfile.write("%.9e %.9e %.9e\n" % (self.gasvel[ix, iy, iz, 0], self.gasvel[ix, iy, iz, 1],
                                                                self.gasvel[ix, iy, iz, 2]))
 
-    def writeDustAlign(self, fname='', binary=False, octree=False, fdir=None):
-        """Writes the dust alignment.
+    def writeDustAlign(self, fname='', binary=False, fdir=None):
+        """Writes the dust alignment. Note that the alignment direction is only in cartesian directions 
 
         Parameters
         ----------
@@ -1656,91 +1672,22 @@ class radmc3dData(object):
         binary : bool
                 If true the data will be written in binary format, otherwise the file format is ascii
 
-        octree  : bool, optional
-                  If the data is defined on an octree-like AMR
         """
-        if binary:
-            if fname == '':
+        # determine default file name
+        if fname == '':
+            if binary:
                 fname = 'grainalign_dir.binp'
-
-            print('Writing ' + fname)
-            with open(fname, 'w') as wfile:
-
-                if octree:
-                    #
-                    # Check if the gas velocity contains the full tree or only the leaf nodes
-                    #
-                    if self.alvec.shape[0] == self.grid.nLeaf:
-                        hdr = np.array([1, 8, self.alvec.shape[0]], dtype=np.int64)
-                        hdr.tofile(wfile)
-                        self.alvec.flatten(order='f').tofile(wfile)
-                    else:
-                        hdr = np.array([1, 8, self.grid.nLeaf], dtype=np.int64)
-                        hdr.tofile(wfile)
-                        dummy = self.grid.convArrTree2Leaf(self.alvec)
-                        dummy.flatten(order='f').tofile(wfile)
-                        # self.alvec.flatten(order='f').tofile(wfile)
-                else:
-                    hdr = np.array([1, 8, self.grid.nx * self.grid.ny * self.grid.nz], dtype=int)
-                    hdr.tofile(wfile)
-                    # Now we need to change the axis orders since the Ndarray.tofile function writes the
-                    # array always in C-order while we need Fortran-order to be written
-                    self.alvec = np.swapaxes(self.alvec, 0, 2)
-                    self.alvec.tofile(wfile)
-
-                    # Switch back to the original axis order
-                    self.alvec = np.swapaxes(self.alvec, 0, 2)
-        else:
-            if fname == '':
-                fname = 'grainalign_dir.inp'
-                if fdir is not None:
-                    if fdir[-1] is '/':
-                        fname = fdir + fname
-                    else:
-                        fname = fdir + '/' + fname
-
-            print('Writing ' + fname)
-
-            # If we have an octree grid
-            if octree:
-                #
-                # Check if the alignment vector contains the full tree or only the leaf nodes
-                #
-                if self.alvec.shape[0] == self.grid.nLeaf:
-                    hdr = '1\n'
-                    hdr += ("%d\n" % self.alvec.shape[0])
-                    try:
-                        np.savetxt(fname, self.alvec, fmt="%.9e %.9e %.9e", header=hdr, comments='')
-                    except Exception as e:
-                        print(e)
-                else:
-                    hdr = '1\n'
-                    hdr += ("%d\n" % self.grid.nLeaf)
-                    dummy = self.grid.convArrTree2Leaf(self.alvec)
-                    try:
-                        np.savetxt(fname, dummy, fmt="%.9e %.9e %.9e", header=hdr, comments='')
-                    except Exception as e:
-                        print(e)
             else:
-                # hdr = "1\n"
-                # hdr += ('%d'%(self.grid.nx*self.grid.ny*self.grid.nz))
-                # np.savetxt(fname, self.alvec, fmt="%.9 %.9 %.9", header=hdr, comments='')
+                fname = 'grainalign_dir.inp'
 
-                # self.alvec up to here are all good and normal
+        # add on fdir
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
 
-                with open(fname, 'w') as wfile:
+        # write out the data 
+        self._vectorfieldWriter(fname, self.alvec, binary=binary, ndim=4)
 
-                    wfile.write('%d\n' % 1)
-                    wfile.write('%d\n' % (self.grid.nx * self.grid.ny * self.grid.nz))
-
-                    for iz in range(self.grid.nz):
-                        for iy in range(self.grid.ny):
-                            for ix in range(self.grid.nx):
-                                wfile.write("%.9e %.9e %.9e\n" % (self.alvec[ix, iy, iz, 0], 
-                                                                  self.alvec[ix, iy, iz, 1],
-                                                                  self.alvec[ix, iy, iz, 2]))
-
-    def writeBfield(self, fname='', binary=False, octree=False, fdir=None):
+    def writeBfield(self, fname='', binary=False, fdir=None):
         """Writes the Bfield
 
         Parameters
@@ -1753,88 +1700,18 @@ class radmc3dData(object):
         binary : bool
                 If true the data will be written in binary format, otherwise the file format is ascii
 
-        octree  : bool, optional
-                  If the data is defined on an octree-like AMR
         """
 
-        if binary:
-            if fname == '':
+        if fname == '':
+            if binary:
                 fname = 'Bfield.binp'
-
-            print('Writing ' + fname)
-            with open(fname, 'w') as wfile:
-
-                if octree:
-                    #
-                    # Check if the gas velocity contains the full tree or only the leaf nodes
-                    #
-                    if self.bfield.shape[0] == self.grid.nLeaf:
-                        hdr = np.array([1, 8, self.bfield.shape[0]], dtype=np.int64)
-                        hdr.tofile(wfile)
-                        self.bfield.flatten(order='f').tofile(wfile)
-                    else:
-                        hdr = np.array([1, 8, self.grid.nLeaf], dtype=np.int64)
-                        hdr.tofile(wfile)
-                        dummy = self.grid.convArrTree2Leaf(self.bfield)
-                        dummy.flatten(order='f').tofile(wfile)
-                        # self.bfield.flatten(order='f').tofile(wfile)
-
-                else:
-                    hdr = np.array([1, 8, self.grid.nx * self.grid.ny * self.grid.nz], dtype=int)
-                    hdr.tofile(wfile)
-                    # Now we need to change the axis orders since the Ndarray.tofile function writes the
-                    # array always in C-order while we need Fortran-order to be written
-                    self.bfield = np.swapaxes(self.bfield, 0, 2)
-                    self.bfield.tofile(wfile)
-
-                    # Switch back to the original axis order
-                    self.bfield = np.swapaxes(self.bfield, 0, 2)
-        else:
-            if fname == '':
-                fname = 'Bfield.inp'
-                if fdir is not None:
-                    fname = os.path.join(fdir, fname)
-
-            print('Writing ' + fname)
-
-            # If we have an octree grid
-            if octree:
-                #
-                # Check if the gas velocity contains the full tree or only the leaf nodes
-                #
-                if self.bfield.shape[0] == self.grid.nLeaf:
-                    hdr = '1\n'
-                    hdr += ("%d\n" % self.bfield.shape[0])
-                    try:
-                        np.savetxt(fname, self.bfield, fmt="%.9e %.9e %.9e", header=hdr, comments='')
-                    except Exception as e:
-                        print(e)
-                else:
-                    hdr = '1\n'
-                    hdr += ("%d\n" % self.grid.nLeaf)
-                    dummy = self.grid.convArrTree2Leaf(self.bfield)
-                    try:
-                        np.savetxt(fname, dummy, fmt="%.9e %.9e %.9e", header=hdr, comments='')
-                    except Exception as e:
-                        print(e)
-
             else:
-                # hdr = "1\n"
-                # hdr += ('%d'%(self.grid.nx*self.grid.ny*self.grid.nz))
-                # np.savetxt(fname, self.bfield, fmt="%.9 %.9 %.9", header=hdr, comments='')
+                fname = 'Bfield.inp'
 
-                # self.bfield up to here are all good and normal
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
 
-                with open(fname, 'w') as wfile:
-
-                    wfile.write('%d\n' % 1)
-                    wfile.write('%d\n' % (self.grid.nx * self.grid.ny * self.grid.nz))
-
-                    for iz in range(self.grid.nz):
-                        for iy in range(self.grid.ny):
-                            for ix in range(self.grid.nx):
-                                wfile.write("%.9e %.9e %.9e\n" % (self.bfield[ix, iy, iz, 0], self.bfield[ix, iy, iz, 1],
-                                                               self.bfield[ix, iy, iz, 2]))
+        self._vectorfieldWriter(fname, self.bfield, binary=binary, ndim=3)
 
     def writeVTurb(self, fname='', binary=True, octree=False, fdir=None):
         """Writes the microturbulence file.
@@ -2126,7 +2003,7 @@ class radmc3dData(object):
         dum = np.squeeze(mass.sum(1))
         self.sigmagas = dum / np.squeeze(surf)
 
-def integrateDataOverFrequency(dat_nu, nuCell=None, nuWall=None, phys_nu=None):
+def integrateOverFrequency(dat_nu, nuCell=None, nuWall=None, phys_nu=None):
     """
     integrate a gridded data over frequency, used to calculate energy density
     Parameters
@@ -2171,3 +2048,92 @@ def integrateDataOverFrequency(dat_nu, nuCell=None, nuWall=None, phys_nu=None):
         dat_sum = flat_dat_sum
     return dat_sum
 
+def integrateOverWavelength(dat_w, wavCell=None, wavWall=None, phys_w=None):
+    """
+    calculate a value summed over wavelength, eg radE, 
+    and also calculate the average wavelength
+    Parameters
+    ----------
+    wav : 1d ndarray
+        the wavelength axis where the radiation field is defined
+    dat_w : ndarray
+        can be of any dimension, but the wavelength dependence is always the last dimension
+    """
+    if (wavCell is None) & (wavWall is None):
+        raise ValueError('at least the wavelength cell or wall should be given')
+
+    if wavCell is not None:
+        # extrapolate to obtain the wavelength walls
+        wavWall = grid.extrapolate_geo(wavCell)
+
+    dim = dat_w.shape
+    ndim = len(dim)
+
+    nw = len(wavWall) - 1
+    dw = np.diff(wavWall)
+
+    # flatten the array 
+    if ndim > 1:
+        ncells = np.prod(dim[:-1])
+        flat_dat_w = np.reshape(dat_w, (ncells, nw))
+    else:
+        flat_dat_w = dat_w
+
+    # integrate
+    if phys_w is None:
+        flat_dat_sum = np.sum(flat_dat_w * dw, axis=-1)
+    else:
+        flat_dat_sum = np.sum(flat_dat_w * phys_w * dw, axis=-1)
+
+    if ndim > 1:
+        dat_sum = np.reshape(flat_dat_sum, dim[:-1])
+    else:
+        dat_sum = flat_dat_sum
+
+    return dat_sum
+
+def integrate_x(dat_x, xCell=None, xWall=None, phys_x=None):
+    """
+    calculate a value summed over x 
+    Parameters
+    ----------
+    xCell : 1d ndarray
+    xWall : 1d ndarray
+
+    dat_x : ndarray
+        can be of any dimension, but the x dependence is always the last dimension
+    """
+    if (xCell is None) & (xWall is None):
+        raise ValueError('at least the cell or wall should be given')
+
+    if xCell is not None:
+        # extrapolate to obtain the walls
+        xWall = grid.extrapolate_geo(xCell)
+
+    dim = dat_x.shape
+    ndim = len(dim)
+
+    nx = len(xWall) - 1
+    dx = np.diff(xWall)
+
+    # flatten the array 
+    if ndim > 1:
+        ncells = np.prod(dim[:-1])
+        flat_dat_x = np.reshape(dat_x, (ncells, nx))
+        if phys_x is not None:
+            flat_phys_x = np.reshape(phys_x, (ncells, nx))
+    else:
+        flat_dat_x = dat_x
+
+    # integrate
+    if phys_x is None:
+        flat_dat_sum = np.sum(flat_dat_x * dx, axis=-1)
+    else:
+        flat_dat_sum = np.sum(flat_dat_x * flat_phys_x * dx, axis=-1)
+
+    if ndim > 1:
+        dat_sum = np.reshape(flat_dat_sum, dim[:-1])
+    else:
+        dat_sum = flat_dat_sum
+
+    return dat_sum

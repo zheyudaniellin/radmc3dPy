@@ -516,8 +516,6 @@ class radmc3dDustOpac(object):
                 self.korth.append(data[:,:,0])
                 self.kpara.append(data[:,:,1])
 
-        return 0
-
     def makeOpac(self, ppar=None, wav=None, old=False, code='python',
                  theta=None, logawidth=None, wfact=3.0, na=20, chopforward=0., errtol=0.01,
                  verbose=False, extrapolate=False, fdir=None,
@@ -1192,15 +1190,12 @@ class radmc3dDustOpac(object):
 
         print('writing '+fname)
         with open(fname, 'w') as wfile:
-            wfile.write('1\n')
-            wfile.write('%d\n'%(self.nwav[idust]))
-            wfile.write('%d\n'%(len(self.alignang[idust])))
+            hdr = np.array([1, self.nwav[idust], len(self.alignang[idust])])
+            hdr.tofile(wfile, sep='\n', format='%d')
             wfile.write('\n')
-            for i in range(self.nwav[idust]):
-                wfile.write('%13.6e\n'%(self.wav[idust][i]))
+            self.wav[idust].tofile(wfile, sep='\n', format='%13.6e')
             wfile.write('\n')
-            for i in range(len(self.alignang[idust])):
-                wfile.write('%13.6e\n'%(self.alignang[idust][i]))
+            self.alignang[idust].tofile(wfile, sep='\n', format='%13.6e')
             wfile.write('\n')
             for inu in range(self.nwav[idust]):
                 for imu in range(len(self.alignang[idust])):
