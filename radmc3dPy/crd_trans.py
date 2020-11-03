@@ -148,12 +148,12 @@ def vtransSph2Cart(crd=None, v=None, reverse=False):
         #
         # New stuff
         #
-        vout = np.zeros(3, dtype=np.float64)
-        r = np.sqrt((crd**2).sum())
+        vout = [0, 0, 0]
+        r = np.sqrt(crd[0]**2 + crd[1]**2 + crd[2]**2)
         rc = np.sqrt(crd[0]**2 + crd[1]**2)
 
         # Vr
-        vout[0] = (crd * v).sum() / r
+        vout[0] = (crd[0] * v[0] + crd[1] * v[1] + crd[2] * v[2]) / r
         # Vtheta
         vout[1] = (crd[2] * (crd[0] * v[0] + crd[1] * v[1]) - v[2] * rc**2) / (r * rc)
         # Vphi
