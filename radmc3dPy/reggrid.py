@@ -159,19 +159,10 @@ class radmc3dGrid(object):
                 raise ValueError('Unknown nw. Without the number of grid points the wavelength grid cannot be '
                                  + 'generated')
 
-        self.nwav = nw[0]
-        self.wav = wbound[0] * (wbound[1] / wbound[0]) ** (np.arange(nw[0], dtype=np.float64) / nw[0])
+        # use the walls, so we'll have nw+1 points
+        dum, self.wav= getAxis(nw, wbound, 'geo')
 
-        for ipart in range(1, len(nw) - 1):
-            dum = wbound[ipart] * (wbound[ipart + 1]
-                                   / wbound[ipart]) ** (np.arange(nw[ipart], dtype=np.float64) / nw[ipart])
-            self.wav = np.append(self.wav, dum)
-
-        ipart = len(nw) - 1
-        dum = wbound[ipart] * (wbound[ipart + 1]
-                               / wbound[ipart]) ** (np.arange(nw[ipart], dtype=np.float64) / (nw[ipart] - 1.))
-        self.wav = np.append(self.wav, dum)
-        self.nwav = self.wav.shape[0]
+        self.nwav = len(self.wav)
         self.freq = nc.cc / self.wav * 1e4
         self.nfreq = self.nwav
 

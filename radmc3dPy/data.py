@@ -21,7 +21,20 @@ from . dustopac import *
 from . reggrid import radmc3dGrid
 from . octree import radmc3dOctree
 
-class radmc3dData(object):
+class BaseData(object):
+    """ base of the data objects
+    include only the essential functions shared by all objects
+
+    Attributes
+    ----------
+    grid      : radmc3dGrid, radmc3dOctree
+                Instance of the radmc3dGrid class, contains the spatial and frequency grids
+
+    """
+    def __init__(self):
+        self.grid = None
+    
+class radmc3dData(BaseData):
     """RADMC-3D data class.
         Reading and writing dust density/temperature, gas density/temperature/velocity,
         generating a legacy vtk file for visualization.
@@ -86,12 +99,8 @@ class radmc3dData(object):
 
     """
 
-    def __init__(self, grid=None):
-
-        if grid:
-            self.grid = grid
-        else:
-            self.grid = None
+    def __init__(self):
+        BaseData.__init__(self)
 
         self.rhodust = np.zeros(0, dtype=np.float64)
         self.dusttemp = np.zeros(0, dtype=np.float64)
@@ -516,6 +525,7 @@ class radmc3dData(object):
                     dim = [3,self.grid.nx, self.grid.ny, self.grid.nz]
                 else:
                     dim = [3,self.grid.nx, self.grid.ny, self.grid.nz, ndust]
+
                 arr = np.reshape(arr, dim, order='f')
 
                 # want the last index to denote the direction
@@ -1385,8 +1395,9 @@ class radmc3dData(object):
                     fname = 'dust_density.binp'
                 else:
                     fname = 'dust_density.inp'
-                if fdir is not None:
-                    fname = os.path.join(fdir, fname)
+
+            if fdir is not None:
+                fname = os.path.join(fdir, fname)
 
             print('Writing ' + fname)
 #            if self.grid.crd_sys is 'sph':
@@ -1580,6 +1591,18 @@ class radmc3dData(object):
                   If the data is defined on an octree-like AMR
         """
 
+        if fname == '':
+            if binary:
+                fname = 'gas_velocity.binp'
+            else:
+                fname = 'gas_velocity.inp'
+
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
+
+        self._vectorfieldWriter(fname, self.gasvel, binary=binary, ndim=3)
+
+        """ keep this for reference. can be deleted if checked later on 
         if binary:
             if fname == '':
                 fname = 'gas_velocity.binp'
@@ -1607,11 +1630,14 @@ class radmc3dData(object):
                     hdr.tofile(wfile)
                     # Now we need to change the axis orders since the Ndarray.tofile function writes the
                     # array always in C-order while we need Fortran-order to be written
-                    self.gasvel = np.swapaxes(self.gasvel, 0, 2)
-                    self.gasvel.tofile(wfile)
+#                    self.gasvel = np.swapaxes(self.gasvel, 0, 2)
+#                    self.gasvel.tofile(wfile)
 
                     # Switch back to the original axis order
-                    self.gasvel = np.swapaxes(self.gasvel, 0, 2)
+#                    self.gasvel = np.swapaxes(self.gasvel, 0, 2)
+
+                    self.gasvel.flatten(order='f').tofile(wfile)
+
         else:
             if fname == '':
                 fname = 'gas_velocity.inp'
@@ -1648,17 +1674,24 @@ class radmc3dData(object):
 
                 # self.gasvel up to here are all good and normal
 
+                nrcells = self.grid.nx * self.grid.ny * self.grid.nz
+
+                dummy = np.moveaxis(self.gasvel, -1, 0)
+                dummy = np.reshape(dummy, [3, nrcells], order='f')
+
                 with open(fname, 'w') as wfile:
 
                     wfile.write('%d\n' % 1)
-                    wfile.write('%d\n' % (self.grid.nx * self.grid.ny * self.grid.nz))
+                    wfile.write('%d\n' % nrcells )
 
-                    for iz in range(self.grid.nz):
-                        for iy in range(self.grid.ny):
-                            for ix in range(self.grid.nx):
-                                wfile.write("%.9e %.9e %.9e\n" % (self.gasvel[ix, iy, iz, 0], self.gasvel[ix, iy, iz, 1],
-                                                               self.gasvel[ix, iy, iz, 2]))
+                    np.savetxt(wfile, dummy.T, fmt='%.9e')
 
+#                    for iz in range(self.grid.nz):
+#                        for iy in range(self.grid.ny):
+#                            for ix in range(self.grid.nx):
+#                                wfile.write("%.9e %.9e %.9e\n" % (self.gasvel[ix, iy, iz, 0], self.gasvel[ix, iy, iz, 1],
+#                                                               self.gasvel[ix, iy, iz, 2]))
+        """
     def writeDustAlign(self, fname='', binary=False, fdir=None):
         """Writes the dust alignment. Note that the alignment direction is only in cartesian directions 
 

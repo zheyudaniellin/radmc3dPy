@@ -108,6 +108,17 @@ class radmc3dImage(object):
     wav         : ndarray
                   Wavelength grid in the image cube
 
+    Optional
+    lpol : ndarray
+        linear polarization fraction 
+    lpa : ndarray
+        polarization angle
+    lpi : ndarray 
+        linear polarized intensity 
+    pol : ndarray
+        total polarization fraction 
+    pi : ndarray
+        total polarizated intensity
     """
 
     def __init__(self):
@@ -132,6 +143,39 @@ class radmc3dImage(object):
         self.dpc = 0
         self.rms = None
         self.filename = 'image.out'
+
+    def getPolarization(self):
+        """ calculate polarization related properties
+        """
+        if self.stokes is False:
+            return 
+
+        if len(self.image.shape) == 3:
+            dummyI = self.image[...,0]
+            # linear polarized intensity 
+            self.lpi = np.sqrt(np.sum(self.image[...,1:3]**2, axis=2))
+
+            # total polarized intensity 
+            self.pi = np.sqrt(np.sum(self.image[...,1:4]**2, axis=2))
+
+            # polarization angle
+            self.lpa = calcPolAng(self.image[:,:,1], self.image[:,:,2])
+        else:
+            dummyI = self.image[...,0,:]
+            # linear polarized intensity 
+            self.lpi = np.sqrt( np.sum(self.image[...,1:3,:]**2, axis=2) )
+
+            # total polarized intensity 
+            self.pi = np.sqrt( np.sum(self.image[...,1:4,:]**2, axis=2) )
+
+            # polarization angle
+            self.lpa = calcPolAng(self.image[:,:,1,:], self.image[:,:,2,:])
+
+        # linear polarization fraction 
+        self.lpol = self.lpi / (dummyI + 1e-90)
+
+        # total polarization fraction 
+        self.pol = self.pi / (dummyI + 1e-90)
 
     def getClosurePhase(self, bl=None, pa=None, dpc=None):
         """Calculates clusure phases for a given model image for any arbitrary baseline triplet.
@@ -3218,7 +3262,7 @@ def plotSpectrum(image=None, ax=None, pltx='wav', plty='fnu', pltyunit='cgs',
     return {'specplot': ax}
 
     
-def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None, pointau=None,
+def makeImage(circ=False, npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None, pointau=None,
               fluxcons=True, nostar=False, noscat=False, secondorder=1,
               widthkms=None, linenlam=None, vkms=None, imolspec=None, iline=None,
               lambdarange=None, nlam=None, loadlambda=False, stokes=False, doppcatch=False,
@@ -3374,12 +3418,14 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
         com = com + ' tausurf ' + ("%.3f" % tausurf)
     else:
         com = com + ' image'
+
+        if circ:
+            com += ' circ'
+
         if tracetau:
             com = com + ' tracetau'
         elif tracecolumn:
             com = com + ' tracecolumn'
-        else:
-            com = com
 
     com = com + ' npix ' + str(int(npix))
     com = com + ' incl ' + str(incl)
@@ -3460,10 +3506,21 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
     # dum = sp.Popen([com], stdout=sp.PIPE, shell=True).wait()
     dum = sp.Popen([com], shell=True).wait()
 
-    if os.path.isfile('image.out') is False:
+    possible_imname = ['image.out', 'circimage.out']
+
+    detect_image = False
+    for iname in possible_imname:
+        detect_image = detect_image | os.path.isfile(iname)
+
+    if detect_image is False:
         msg = 'Did not succeed in making image. \n'
         msg = msg + 'Failed command: '+com
         raise ValueError(msg)
+
+    if fname != '':
+        for iname in possible_imname:
+            if os.path.isfile(iname):
+                os.system('mv %s %s'%(iname, fname))
 
     if tausurf > 1e-3 and fname == '':
         fname = 'tausurface.out'
@@ -3473,9 +3530,6 @@ def makeImage(npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None
 
     if tracecolumn and fname == '':
         fname = 'columndens.out'
-
-    if fname != '':
-        os.system('mv image.out '+fname)
 
     print('Ran command: '+com)
     print('Resulting file: '+fname)
@@ -3993,10 +4047,10 @@ class radmc3dCircimage(object):
 
                 iformat = int(f.readline())
                 if iformat == 1:
-                    stokes = False
+                    self.stokes = False
                     self.npol = 1
                 elif iformat == 3:
-                    stokes = True
+                    self.stokes = True
                     self.npol = 4
 
                 s = f.readline().split()
@@ -4050,14 +4104,10 @@ class radmc3dCircimage(object):
                                 self.image[ir, iphi, 2, inu] = float(s[2])
                                 self.image[ir, iphi, 3, inu] = float(s[3])
 
-            pdb.set_trace()
             psize = self.getPixelSize()
             conv = psize / (nc.pc**2) * 1e23
-            self.imageJyppix = np.zeros((self.nr, self.nphi, self.npol, self.nfreq), dtype=np.float64)
-            for ipol in range(self.npol):
-                for inu in range(self.nfreq):
-                    self.imageJyppix[:, :, ipol, inu] = self.image[:, :, ipol, inu] * conv
-
+            self.imageJyppix = np.zeros_like(self.image, dtype=np.float64)
+            self.imageJyppix = self.image * conv[:,:,None,None]
 
 def readcircimage(filename='circimage.out', old=False):
     """

@@ -23,4 +23,4 @@ __version__ = "0.30"
 __author__ = "Attila Juhasz"
 __copyright__ = "Copyright (C) 2011-2018 Attila Juhasz"
 __all__ = ["analyze", "crd_trans", "data", "dustopac","image","miescat", "models", "molecule", "natconst", "octree",
-           "params", "radsources", "reggrid", "setup", "staratm", "zylutils"]
+           "params", "radsources", "reggrid", "setup", "staratm"]
