@@ -20,21 +20,8 @@ from . import crd_trans
 from . dustopac import *
 from . reggrid import radmc3dGrid
 from . octree import radmc3dOctree
-
-class BaseData(object):
-    """ base of the data objects
-    include only the essential functions shared by all objects
-
-    Attributes
-    ----------
-    grid      : radmc3dGrid, radmc3dOctree
-                Instance of the radmc3dGrid class, contains the spatial and frequency grids
-
-    """
-    def __init__(self):
-        self.grid = None
     
-class radmc3dData(BaseData):
+class radmc3dData(object):
     """RADMC-3D data class.
         Reading and writing dust density/temperature, gas density/temperature/velocity,
         generating a legacy vtk file for visualization.
@@ -55,7 +42,7 @@ class radmc3dData(BaseData):
     rhogas    : ndarray
                 Gas density in g/cm^3
 
-    ndens_mol : ndarray
+    gasndens : ndarray
                 Number density of the molecule [molecule/cm^3]
 
     ndens_cp  : ndarray
@@ -100,12 +87,13 @@ class radmc3dData(BaseData):
     """
 
     def __init__(self):
-        BaseData.__init__(self)
 
+        self.grid = None
+ 
         self.rhodust = np.zeros(0, dtype=np.float64)
         self.dusttemp = np.zeros(0, dtype=np.float64)
         self.rhogas = np.zeros(0, dtype=np.float64)
-        self.ndens_mol = np.zeros(0, dtype=np.float64)
+        self.gasndens = np.zeros(0, dtype=np.float64)
         self.ndens_cp = np.zeros(0, dtype=np.float64)
         self.gasvel = np.zeros(0, dtype=np.float64)
         self.gastemp = np.zeros(0, dtype=np.float64)
@@ -204,6 +192,7 @@ class radmc3dData(BaseData):
         -------
 
         Returns a numpy Ndarray with the scalar field
+        always a 4 dimensional array for convenience
         """
 
         data = None
@@ -271,14 +260,16 @@ class radmc3dData(BaseData):
 
                     if ndim == 3:
                         if data.shape[0] == hdr[2]:
-                            data = np.reshape(data, [1, self.grid.nz, self.grid.ny, self.grid.nx])
+                            #data = np.reshape(data, [1, self.grid.nz, self.grid.ny, self.grid.nx])
+                            data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, 1], order='F')
                         else:
                             msg = 'Internal inconsistency in data file, number of cell entries is different from ' \
                                   'indicated in the file header'
                             raise ValueError(msg)
                     else:
                         if data.shape[0] == hdr[2] * hdr[3]:
-                            data = np.reshape(data, [hdr[3], self.grid.nz, self.grid.ny, self.grid.nx])
+                            #data = np.reshape(data, [hdr[3], self.grid.nz, self.grid.ny, self.grid.nx])
+                            data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, hdr[3]], order='F')
                         else:
                             msg = 'Internal inconsistency in data file, number of cell entries is different from ' \
                                   'indicated in the file header'
@@ -287,8 +278,8 @@ class radmc3dData(BaseData):
                     # data = reshape(data, [hdr[3],self.grid.nz,self.grid.ny,self.grid.nx])
                     # We need to change the axis orders as Numpy always writes binaries in C-order while RADMC-3D
                     # uses Fortran-order
-                    data = np.swapaxes(data, 0, 3)
-                    data = np.swapaxes(data, 1, 2)
+                    #data = np.swapaxes(data, 0, 3)
+                    #data = np.swapaxes(data, 1, 2)
 
             else: # if not binary
                 if ndim == 3:
@@ -693,7 +684,7 @@ class radmc3dData(BaseData):
                 self.tauy = self.tauy + dum['tauy']
 
     def getGasMass(self, mweight=2.3, rhogas=False):
-        """Calculates the gas mass in radmc3dData.ndens_mol or radmc3dData.rhogas
+        """Calculates the gas mass in radmc3dData.gasndens or radmc3dData.rhogas
 
         Parameters
         ----------
@@ -702,7 +693,7 @@ class radmc3dData(BaseData):
 
             rhogas    : bool, optional
                         If True the gas mass will be calculated from radmc3dData.rhogas, while if set to False
-                        the gas mass will be calculated from radmc3dData.ndens_mol. The mweight parameter is only
+                        the gas mass will be calculated from radmc3dData.gasndens. The mweight parameter is only
                         required for the latter.
 
         Returns
@@ -716,9 +707,9 @@ class radmc3dData(BaseData):
             # I'm not sure if this is the right way of doing it but right now I don't have a better idea
             #
             if isinstance(self.grid, radmc3dOctree):
-                return (vol * self.ndens_mol[:, 0] * mweight * nc.mp).sum()
+                return (vol * self.gasndens[:, 0] * mweight * nc.mp).sum()
             else:
-                return (vol * self.ndens_mol[:, :, :, 0] * mweight * nc.mp).sum()
+                return (vol * self.gasndens[:, :, :, 0] * mweight * nc.mp).sum()
 
         else:
             if isinstance(self.grid, radmc3dOctree):
@@ -878,22 +869,6 @@ class radmc3dData(BaseData):
                 data = data[1:]
                 self.dusttemp[:, :hdr[2], 0, idust] = np.reshape(data[:ncell], [hdr[1], hdr[2]])
             self.dusttemp[:, hdr[2]:, 0, :] = self.dusttemp[:, :hdr[2], 0, :][:, ::-1, :]
-
-    def readGasDens(self, fname='', fdir=None, binary=False):
-        """ read the gas density 
-        """
-        
-        if fname == '':
-            if binary:
-                fname = 'gas_density.binp'
-            else:
-                fname = 'gas_density.inp'
-
-        if fdir is not None:
-            fname = os.path.join(fdir, fname)
-
-        print('Reading '+fname)
-        self.rhogas = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
 
     def readGasVel(self, fname='', fdir=None, binary=False, octree=False):
         """Reads the gas velocity.
@@ -1120,8 +1095,8 @@ class radmc3dData(BaseData):
 
         return True
 
-    def readGasDens(self, ispec='', fdir=None, binary=True, octree=False):
-        """Reads the gas density.
+    def readGasNdens(self, ispec='', fdir=None, binary=True, octree=False):
+        """Reads the number density of gas species  
 
         Parameters
         ----------
@@ -1136,28 +1111,26 @@ class radmc3dData(BaseData):
                   If the data is defined on an octree-like AMR
         """
 
-        if self.grid is None:
-            if octree:
-                self.grid = radmc3dOctree()
-            else:
-                self.grid = radmc3dGrid()
-                self.grid.readGrid(old=False)
-
+        # determine file name
+        fname = 'numberdens_' + ispec
         if binary:
-            fname = 'numberdens_' + ispec + '.binp'
-
+            fname += '.binp'
         else:
-            fname = 'numberdens_' + ispec + '.inp'
+            fname += '.inp'
 
         if fdir is not None:
-            fname = fdir + '/' + fname
+            fname = os.path.join(fdir, fname)
 
         print('Reading gas density (' + fname + ')')
-        self.ndens_mol = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
-        if octree:
-            self.ndens_mol = np.squeeze(self.ndens_mol)
+        igas = self._scalarfieldReader(fname=fname, binary=binary, octree=octree, ndim=3)
 
-        return True
+        if len(self.gasndens) == 0:
+            self.gasndens = igas
+        else:
+            self.gasndens = np.vstack((self.gasndens.T, igas.T)).T
+
+        if octree:
+            self.gasndens = np.squeeze(self.gasndens)
 
     def readGasTemp(self, fname='', binary=True, octree=False):
         """Reads the gas temperature.
@@ -1252,14 +1225,27 @@ class radmc3dData(BaseData):
         tot_lum = lum.sum()
         return tot_lum
  
-    def readRadiationField(self, fname='', fdir=None, binary=False):
+    def readRadiationField(self, fname='', fdir=None, binary=False, rtype=None):
         """ read the radiation field
+        Parameters
+        ----------
+        rtype : str
+            the type of radiation field 
+            None = just the total radiation field
+            'star' = radiation field from star
         """
         if fname == '':
-            if binary:
-                fname = 'mean_intensity.bout'
+            if rtype is None:
+                fname = 'mean_intensity'
+            elif rtype == 'star':
+                fname = 'mean_intensity_star'
             else:
-                fname = 'mean_intensity.out'
+                raise ValueError('rtype unknown')
+
+            if binary:
+                fname += '.bout'
+            else:
+                fname += '.out'
 
         if fdir is not None:
             fname = os.path.join(fdir, fname)
@@ -1305,7 +1291,13 @@ class radmc3dData(BaseData):
             # reformat
             data = np.reshape(data, [self.grid.nx, self.grid.ny, self.grid.nz, self.grid.radnfreq], order='F')
 
-        self.radfield = data
+        # designate the radiation field 
+        if rtype is None:
+            self.radfield = data
+        elif rtype == 'star':
+            self.starfield = data
+        else:
+            raise ValueError('rtype unknown')
 
     def readFluxField(self, fname='', fdir=None, binary=False):
         """ read the flux field. basically the same as mean_intensity.out, but with directions
@@ -1503,7 +1495,7 @@ class radmc3dData(BaseData):
         if isinstance(self.grid, radmc3dOctree):
             self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.ndens_mol), fname=fname, binary=binary)
         else:
-            self._scalarfieldWriter(data=self.ndens_mol, fname=fname, binary=binary)
+            self._scalarfieldWriter(fname, self.ndens_mol, binary=binary)
 
     def writeGasTemp(self, fname='', binary=True, octree=False, fdir=None):
         """Writes the gas temperature.
