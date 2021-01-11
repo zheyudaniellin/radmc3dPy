@@ -61,9 +61,98 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from . import natconst as nc
 
-class radmc3dImage(object):
+class baseImage(object):
     """
-    RADMC-3D image class
+    the parent of all images. This will keep the intensity, tau surface, optical depth information, etc
+
+    Attributes
+    ----------
+    freq : 1d array
+        frequency in Hz
+    wav : 1d array
+        wavelength in micron 
+    image : ndarray
+        image in [x, y, stokes, w]. typically the intensity (in cgs), but it can be optical depth, or
+        the tau=1 location 
+
+    imageJyppix : ndarray, optional
+        The image with pixel units of Jy/pixel
+
+    lpi : ndarray, optional
+        linear polarized intensity
+
+    lpol : ndarray, optional 
+        linear polarization fraction 
+
+    lpa : ndarray, optional
+        linear polarization angle
+
+    cpol : ndarray, optional 
+        circular polarization fraction 
+
+    pol : ndarray, optional 
+        polarization fraction 
+    """
+    def __init__(self):
+        self.image = None
+        self.stokes = None
+
+    def isStokes(self, iformat):
+        """
+        determines if the image is a 4D image based on iformat
+        """
+        if iformat == 3:
+            self.stokes = True
+        else:
+            self.stokes = False
+
+    def getFreq(self):
+        """ get frequency after wavelength is known 
+        """
+        self.freq = nc.cc * 1e4 / self.wav
+
+    def getPolarization(self):
+        """ calculate polarization related properties
+        """
+        if self.stokes is False:
+            return
+
+        if len(self.image.shape) == 3:
+            dummyI = self.image[...,0]
+            # linear polarized intensity 
+            self.lpi = np.sqrt(np.sum(self.image[...,1:3]**2, axis=2))
+
+            # total polarized intensity 
+            self.pi = np.sqrt(np.sum(self.image[...,1:4]**2, axis=2))
+
+            # polarization angle
+            self.lpa = calcPolAng(self.image[:,:,1], self.image[:,:,2])
+        else:
+            dummyI = self.image[...,0,:]
+            # linear polarized intensity 
+            self.lpi = np.sqrt( np.sum(self.image[...,1:3,:]**2, axis=2) )
+
+            # total polarized intensity 
+            self.pi = np.sqrt( np.sum(self.image[...,1:4,:]**2, axis=2) )
+
+            # polarization angle
+            self.lpa = calcPolAng(self.image[:,:,1,:], self.image[:,:,2,:])
+
+        # linear polarization fraction 
+        self.lpol = self.lpi / (dummyI + 1e-90)
+
+        # total polarization fraction 
+        self.pol = self.pi / (dummyI + 1e-90)
+
+    def getTotalFlux(self):
+        if hasattr(self, 'pixel_area') is False:
+            self.getPixelArea()
+
+        self.totalflux = np.sum(self.image * self.pixel_area, axis=(0,1))
+
+class radmc3dImage(baseImage):
+    """
+    RADMC-3D rectangular image class
 
     Attributes
     ----------
@@ -123,7 +212,6 @@ class radmc3dImage(object):
 
     def __init__(self):
         self.image = None
-        self.imageJyppix = None #IMPORTANT!! No longer assumes at 1pc !!
         self.tausurf = None #try not to use this
         self.totflux = None
         self.x = None
@@ -144,38 +232,28 @@ class radmc3dImage(object):
         self.rms = None
         self.filename = 'image.out'
 
-    def getPolarization(self):
-        """ calculate polarization related properties
+    def getPixelArea(self):
+        """ calculate pixel area 
+        Assigns
+        -------
+        pixel_area
         """
-        if self.stokes is False:
-            return 
+        self.pixel_area = self.sizepix_x * self.sizepix_y
 
-        if len(self.image.shape) == 3:
-            dummyI = self.image[...,0]
-            # linear polarized intensity 
-            self.lpi = np.sqrt(np.sum(self.image[...,1:3]**2, axis=2))
+    def getJyppix(self, dpc):
+        """ calculate jyppix image
+        Assigns
+        -------
+        imageJyppix
+        dpc
+        """
+        # calculate the pixel area
+        if hasattr(self, 'pixel_area') is False:
+            self.getPixelArea()
 
-            # total polarized intensity 
-            self.pi = np.sqrt(np.sum(self.image[...,1:4]**2, axis=2))
-
-            # polarization angle
-            self.lpa = calcPolAng(self.image[:,:,1], self.image[:,:,2])
-        else:
-            dummyI = self.image[...,0,:]
-            # linear polarized intensity 
-            self.lpi = np.sqrt( np.sum(self.image[...,1:3,:]**2, axis=2) )
-
-            # total polarized intensity 
-            self.pi = np.sqrt( np.sum(self.image[...,1:4,:]**2, axis=2) )
-
-            # polarization angle
-            self.lpa = calcPolAng(self.image[:,:,1,:], self.image[:,:,2,:])
-
-        # linear polarization fraction 
-        self.lpol = self.lpi / (dummyI + 1e-90)
-
-        # total polarization fraction 
-        self.pol = self.pi / (dummyI + 1e-90)
+        # Conversion from erg/s/cm/cm/Hz/ster to Jy/pixel
+        self.imageJyppix = self.image * self.pixel_area / (dpc * nc.pc)**2 * 1e23
+        self.dpc = dpc
 
     def getClosurePhase(self, bl=None, pa=None, dpc=None):
         """Calculates clusure phases for a given model image for any arbitrary baseline triplet.
@@ -838,7 +916,7 @@ class radmc3dImage(object):
 
         return dum.sum(2)
 
-    def readImage(self, fname=None, binary=False, old=False, dpc=1.):
+    def readImage(self, fname=None, binary=False, old=False):
         """Reads a rectangular image calculated by RADMC-3D 
 
         Parameters
@@ -852,9 +930,6 @@ class radmc3dImage(object):
 
         binary  : bool, optional
                  False - the image format is formatted ASCII if True - C-compliant binary (omitted if old=True)
-
-        dpc	: float. Default 1
-                  Distance to source in pc for calculating flux per pixel. 
 
         """
         if old:
@@ -984,11 +1059,6 @@ class radmc3dImage(object):
                                     self.image[ix, iy, 1, iwav] = float(dum[1])
                                     self.image[ix, iy, 2, iwav] = float(dum[2])
                                     self.image[ix, iy, 3, iwav] = float(dum[3])
-
-        # Conversion from erg/s/cm/cm/Hz/ster to Jy/pixel
-        conv = self.sizepix_x * self.sizepix_y / (dpc * nc.pc)**2. * 1e23
-        self.imageJyppix = self.image * conv
-        self.dpc = dpc
 
         self.x = ((np.arange(self.nx, dtype=np.float64) + 0.5) - self.nx / 2) * self.sizepix_x
         self.y = ((np.arange(self.ny, dtype=np.float64) + 0.5) - self.ny / 2) * self.sizepix_y
@@ -1655,7 +1725,7 @@ def getConvolve(imag, psf, method='2'):
 
     return conved
 
-def readImage(fname=None, binary=False, old=False, dpc=1.):
+def readImage(fname=None, binary=False, old=False):
     """Reads an image calculated by RADMC-3D.
        This function is an interface to radmc3dImage.readImage().
 
@@ -1672,7 +1742,7 @@ def readImage(fname=None, binary=False, old=False, dpc=1.):
     """
 
     dum = radmc3dImage()
-    dum.readImage(fname=fname, binary=binary, old=old, dpc=dpc)
+    dum.readImage(fname=fname, binary=binary, old=old)
     return dum
 
 def readFitsToImage(fname=None, dpc=None, wav=None, rms=None, recen=None, padnan=None):
@@ -2744,8 +2814,8 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
                 msg = 'Unknown bunit: ' + bunit + ' Allowed values are "norm", "inu", "snu"'
                 raise ValueError(msg)
             else:
-                psize = image.getPixelSize()
-                conv = psize / (dpc * nc.pc**2) * 1e23
+                pixel_area = image.getPixelSize()
+                conv = pixel_area / (dpc * nc.pc**2) * 1e23
                 data = dum_image.image[:, :, ifreq] * conv
         else:
             data = dum_image.image[:, :, ifreq]
@@ -2865,7 +2935,7 @@ def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None,
     **kwargs : other keywords for plotImage
     """
     if wavinx is None:
-        wavinx = range(image.nwav)
+        wavinx = list(np.arange(image.nwav))
         nwavinx = image.nwav
     nwavinx = len(wavinx)
 
@@ -2875,7 +2945,7 @@ def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None,
 
     from mpl_toolkits.axes_grid1 import ImageGrid
     if chnfig is None:
-        chnfig = plt.figure(figsize=(4*ncol, 3*nrow))
+        chnfig = plt.figure(figsize=(4*ncols, 3*nrows))
     if chngrid is None:
         chngrid = ImageGrid(chnfig, 111, nrows_ncols=(nrows, ncols), axes_pad=0.1,
             share_all=True, cbar_location='right', cbar_mode='single',
@@ -2883,14 +2953,14 @@ def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None,
 
     # calculate velocity information
     if restfreq is not None:
-        vel = nc.cc * (1. - image.freq / restfreq) / (1. + image.freq / restfreq)
+        vel = nc.cc * (1. - image.freq / restfreq) * (-1)
         veltxt = ['%.2f km/s'%(ivel/1e5) for ivel in vel]
 
     for ii in range(nwavinx):
         # plotting axes
         axii = chngrid[ii]
         dum = plotImage(image=image, ifreq=wavinx[ii], ax=axii, 
-            nocolorbar=True, **kwargs)
+            nocolorbar=True, titleplt='', **kwargs)
         if restfreq is not None:
             axii.text(0.98, 0.95, veltxt[ii], ha='right', va='top', 
                 transform=axii.transAxes, color='w')
@@ -3875,7 +3945,7 @@ def getTb(im, wav=None, freq=None, bunit='inu', rj=False,
 # ----------------------------------------------------------------------
 # ------------------ Circular image ------------------------------------
 # ----------------------------------------------------------------------
-class radmc3dCircimage(object):
+class radmc3dCircimage(baseImage):
     """
     RADMC-3D circular image class
 
@@ -3885,13 +3955,13 @@ class radmc3dCircimage(object):
     image       : ndarray
                   The image as calculated by radmc3d (the values are intensities in erg/s/cm^2/Hz/ster)
 
-    rc          : ndarray
+    r          : ndarray
                   Radial cell center coordinate of the image [cm]
 
     ri          : ndarray
                   Radial cell interface coordinate of the image [cm]
 
-    phic        : ndarray
+    phi        : ndarray
                   Azimuthal cell center coordinate of the image [rad]
 
     phii        : ndarray
@@ -3924,15 +3994,15 @@ class radmc3dCircimage(object):
     """
 
     def __init__(self):
+        baseImage.__init__(self)
 
         self.ri = np.zeros(0, dtype=np.float64)
         self.phii = np.zeros(0, dtype=np.float64)
-        self.rc = np.zeros(0, dtype=np.float64)
-        self.phic = np.zeros(0, dtype=np.float64)
+        self.r = np.zeros(0, dtype=np.float64)
+        self.phi = np.zeros(0, dtype=np.float64)
         self.freq = np.zeros(0, dtype=np.float64)
         self.wav = np.zeros(0, dtype=np.float64)
         self.image = np.zeros((0, 0), dtype=np.float64)
-        self.imageJyppix = np.zeros((0, 0), dtype=np.float64)
         self.filename = 'circimage.out'
         self.nphi = 0
         self.nwav = 0
@@ -3953,17 +4023,17 @@ class radmc3dCircimage(object):
         """
 
         nx, ny = self.image.shape[:2]
-        psize = np.zeros([nx, ny], dtype=np.float64)
+        pixel_area = np.zeros([nx, ny], dtype=np.float64)
 
         x2 = np.pi * (self.ri[1:]**2 - self.ri[:-1]**2)
         dy = self.phii[1:] - self.phii[:-1]
 
         for ix in range(nx):
-            psize[ix, :] = x2[ix] * dy / (2.0 * np.pi)
+            pixel_area[ix, :] = x2[ix] * dy / (2.0 * np.pi)
 
-        return psize
+        self.pixel_area = pixel_area
 
-    def readImage(self, filename='circimage.out', old=False):
+    def readImage(self, fname='circimage.out', old=False):
         """
         Reads a circular image
 
@@ -3978,13 +4048,13 @@ class radmc3dCircimage(object):
                           RADMC-3D format is used.
         """
 
-        self.filename = filename
+        self.filename = fname
 
         if old:
             self.stokes = False
             self.npol = 1
 
-            with open(filename, 'r') as f:
+            with open(self.fname, 'r') as f:
 
                 self.nfreq = int(f.readline())
                 self.nwav = self.nfreq
@@ -4004,10 +4074,10 @@ class radmc3dCircimage(object):
                 self.nfreq = int(s[2])
 
                 s = f.readline()
-                self.rc = np.zeros(self.nr, dtype=np.float64)
+                self.r = np.zeros(self.nr, dtype=np.float64)
                 for ir in range(self.nr):
                     s = f.readline()
-                    self.rc[ir] = float(s)
+                    self.r[ir] = float(s)
 
                 s = f.readline()
                 self.ri = np.zeros(self.nr + 1, dtype=np.float64)
@@ -4016,10 +4086,10 @@ class radmc3dCircimage(object):
                     self.ri[ir] = float(s)
 
                 s = f.readline()
-                self.phic = np.zeros(self.nphi, dtype=np.float64)
+                self.phi = np.zeros(self.nphi, dtype=np.float64)
                 for ip in range(self.nphi):
                     s = f.readline()
-                    self.phic[ip] = float(s)
+                    self.phi[ip] = float(s)
 
                 s = f.readline()
                 self.phii = np.zeros(self.nphi + 1, dtype=np.float64)
@@ -4036,14 +4106,9 @@ class radmc3dCircimage(object):
                         for iphi in range(self.nphi):
                             self.image[ir, :, 0, inu] = float(s[iphi])
 
-                psize = self.getPixelSize()
-                conv = psize / (nc.pc**2) * 1e23
-                self.imageJyppix = np.zeros((self.nr, self.nphi, self.npol, self.nfreq), dtype=np.float64)
-                for inu in range(self.nfreq):
-                    self.imageJyppix[:, :, 0, inu] = self.image[:, :, 0, inu] * conv
         else:
 
-            with open(filename, 'r') as f:
+            with open(self.filename, 'r') as f:
 
                 iformat = int(f.readline())
                 if iformat == 1:
@@ -4057,6 +4122,7 @@ class radmc3dCircimage(object):
                 self.nr = int(s[0])
                 self.nphi = int(s[1])
                 self.nfreq = int(f.readline())
+                self.nwav = self.nfreq
 
                 s = f.readline()
                 self.ri = np.zeros(self.nr + 2, dtype=np.float64)
@@ -4065,10 +4131,10 @@ class radmc3dCircimage(object):
                     self.ri[ir] = float(s)
 
                 s = f.readline()
-                self.rc = np.zeros(self.nr + 1, dtype=np.float64)
+                self.r = np.zeros(self.nr + 1, dtype=np.float64)
                 for ir in range(self.nr + 1):
                     s = f.readline()
-                    self.rc[ir] = float(s)
+                    self.r[ir] = float(s)
 
                 s = f.readline()
                 self.phii = np.zeros(self.nphi + 1, dtype=np.float64)
@@ -4077,19 +4143,18 @@ class radmc3dCircimage(object):
                     self.phii[ip] = float(s)
 
                 s = f.readline()
-                self.phic = np.zeros(self.nphi, dtype=np.float64)
+                self.phi = np.zeros(self.nphi, dtype=np.float64)
                 for ip in range(self.nphi):
                     s = f.readline()
-                    self.phic[ip] = float(s)
+                    self.phi[ip] = float(s)
 
                 s = f.readline()
                 self.freq = np.zeros(self.nfreq, dtype=np.float64)
                 self.wav = np.zeros(self.nfreq, dtype=np.float64)
                 for inu in range(self.nfreq):
                     s = f.readline()
-                    print(inu, s)
-                    self.freq[inu] = float(s)
-                    self.wav[inu] = nc.cc / self.freq[inu]
+                    self.wav[inu] = float(s)
+                    self.freq[inu] = nc.cc * 1e4 / self.wav[inu]
 
                 s = f.readline()
                 self.image = np.zeros((self.nr + 1, self.nphi, self.npol, self.nfreq), dtype=np.float64)
@@ -4104,12 +4169,21 @@ class radmc3dCircimage(object):
                                 self.image[ir, iphi, 2, inu] = float(s[2])
                                 self.image[ir, iphi, 3, inu] = float(s[3])
 
-            psize = self.getPixelSize()
-            conv = psize / (nc.pc**2) * 1e23
-            self.imageJyppix = np.zeros_like(self.image, dtype=np.float64)
-            self.imageJyppix = self.image * conv[:,:,None,None]
+                    dum = f.readline().split() # empty line
 
-def readcircimage(filename='circimage.out', old=False):
+    def getJyppix(self, dpc):
+        """
+        calculate the jansky per pixel. 
+        """
+        # calculate the pixel area
+        if hasattr(self, 'pixel_area') is False:
+            self.getPixelArea()
+
+        # Conversion from erg/s/cm/cm/Hz/ster to Jy/pixel
+        self.imageJyppix = self.image * self.pixel_area[:,:,None,None] / (dpc * nc.pc)**2 * 1e23
+        self.dpc = dpc
+
+def readcircImage(fname='circimage.out', old=False):
     """
     A convenience function to read circular images
 
@@ -4124,5 +4198,7 @@ def readcircimage(filename='circimage.out', old=False):
                       RADMC-3D format is used.
     """
     dum = radmc3dCircimage()
-    dum.readImage(filename=filename, old=old)
+    dum.readImage(fname=fname, old=old)
     return dum
+
+
