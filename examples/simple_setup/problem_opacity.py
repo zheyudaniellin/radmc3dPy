@@ -14,8 +14,8 @@ k_sca  = d['k_sca']
 gsca   = d['g']
 
 # ==== pick out the desired sizes ====
-a = [1e-5, 1e-3]
-name = ['small', 'big']
+a = [1e-3]
+name = ['small']
 ngsize = len(a)
 
 # organize it into radmc3dPy format 
@@ -33,4 +33,11 @@ for ii in range(ngsize):
     opac.writeOpac(ext=name[ii], idust=ii)
 opac.writeMasterOpac(ext=name, scattering_mode_max=2)
 opac.writeDustInfo(ext=name, matdens=[1]*ngsize, gsize=a, dweights=np.ones(ngsize)/ngsize)
+
+
+# ==== plotting ====
+plt.loglog(wgrid, k_abs[20, :])
+plt.loglog(wgrid, k_sca[20, :], '--')
+plt.show()
+
 

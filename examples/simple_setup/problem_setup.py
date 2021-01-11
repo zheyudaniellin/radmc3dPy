@@ -40,8 +40,8 @@ height = H0 * (rr / R0)**(1.25)
 rhogas = sigma / np.sqrt(2*np.pi) / height * np.exp(-0.5 * (zz / height)**2)
 
 # the dust distribution depends on the gas
-ngsize = 2
-mass_fraction = np.array([0.5, 0.5])
+ngsize = 1
+mass_fraction = np.array([1])
 gas_to_dust = 100.
 rhod = np.zeros([grid.nx, grid.ny, grid.nz, ngsize])
 for ii in range(ngsize):
@@ -70,8 +70,9 @@ dat.writeDustTemp()
 par = {
     'nphot_scat': '1000000',
     'istar_sphere': '0',
-    'setthreads': '4',
-    'mc_scat_maxtauabs': '10'
+#    'setthreads': '4',
+    'mc_scat_maxtauabs': '10', 
+    'scattering_mode_max': 1
       }
 fname = 'radmc3d.inp'
 with open(fname, 'w') as wfile:
