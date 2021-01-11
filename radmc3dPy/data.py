@@ -1456,8 +1456,8 @@ class radmc3dData(object):
         else:
             self._scalarfieldWriter(fname, self.dusttemp, binary=binary)
 
-    def writeGasDens(self, fname='', ispec='', binary=True, fdir=None):
-        """Writes the gas density.
+    def writeGasNdens(self, fname='', ispec='', binary=True, fdir=None):
+        """Writes the gas number density.
 
         Parameters
         ----------
@@ -1493,9 +1493,9 @@ class radmc3dData(object):
 
         print('Writing ' + fname)
         if isinstance(self.grid, radmc3dOctree):
-            self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.ndens_mol), fname=fname, binary=binary)
+            self._scalarfieldWriter(data=self.grid.convArrTree2Leaf(self.gasndens), fname=fname, binary=binary)
         else:
-            self._scalarfieldWriter(fname, self.ndens_mol, binary=binary)
+            self._scalarfieldWriter(fname, self.gasndens, binary=binary)
 
     def writeGasTemp(self, fname='', binary=True, octree=False, fdir=None):
         """Writes the gas temperature.
@@ -1962,7 +1962,7 @@ class radmc3dData(object):
                     print('Writing gas density : ', ix, nxi - 2)
                     for iy in range(nyi - 1):
                         for iz in range(nzi - 1):
-                            wfile.write('%.9e\n' % self.ndens_mol[ix, iy, iz])
+                            wfile.write('%.9e\n' % self.gasndens[ix, iy, iz])
 
             if gtemp:
                 wfile.write('%s\n' % 'SCALARS gas_temperature double')
