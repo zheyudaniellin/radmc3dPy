@@ -150,6 +150,17 @@ class baseImage(object):
 
         self.totalflux = np.sum(self.image * self.pixel_area, axis=(0,1))
 
+    def getTb(self):
+        """ calculate brightness temperature
+        only for stokes I, ignores other stokes
+        """
+        self.tb = np.zeros([self.nx, self.ny, self.nwav])
+        for ii in range(self.nwav):
+            if self.stokes:
+                self.tb[:,:,ii] = getTb(self.image[:,:,0,ii], bunit='inu', wav=self.wav[ii])
+            else:
+                self.tb[:,:,ii] = getTb(self.image[:,:,ii], bunit='inu', wav=self.wav[ii])
+
 class radmc3dImage(baseImage):
     """
     RADMC-3D rectangular image class
@@ -240,7 +251,7 @@ class radmc3dImage(baseImage):
         """
         self.pixel_area = self.sizepix_x * self.sizepix_y
 
-    def getJyppix(self, dpc):
+    def get_jyppix(self, dpc):
         """ calculate jyppix image
         Assigns
         -------
@@ -254,6 +265,20 @@ class radmc3dImage(baseImage):
         # Conversion from erg/s/cm/cm/Hz/ster to Jy/pixel
         self.imageJyppix = self.image * self.pixel_area / (dpc * nc.pc)**2 * 1e23
         self.dpc = dpc
+
+    def get_jypbeam(self, dpc):
+        """ calculates jy/beam image if fwhm is set
+        """
+        rad = np.pi / 180.
+        if hasattr(self, 'fwhm') is False:
+            raise ValueError('no fwhm available')
+        if self.fwhm == []:
+            raise ValueError('no fwhm available')
+
+        self.imageJypbeam = np.zeros_like(self.image)
+        for ii in range(self.nwav):
+            bmaj, bmin = self.fwhm[ii]
+            self.imageJypbeam[...,ii] = self.image[...,ii] * (bmaj / 3600. * rad) * (bmin / 3600. * rad) * np.pi / 4. / np.log(2.) * 1e23
 
     def getClosurePhase(self, bl=None, pa=None, dpc=None):
         """Calculates clusure phases for a given model image for any arbitrary baseline triplet.
@@ -2073,7 +2098,8 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
     uur = (np.squeeze(dum_image.image[:, :, 2, ifreq])
            / np.squeeze(dum_image.image[:, :, 0, ifreq]).clip(1e-60))[np.ix_(iix, iiy)]
     # fraction of linear polarization = sqrt(Q^2 + U^2) / I
-    lpol = np.sqrt(qqr**2 + uur**2).clip(1e-60) 
+#    lpol = np.sqrt(qqr**2 + uur**2).clip(1e-60) 
+    lpol = image.lpol[:,:,ifreq][np.ix_(iix, iiy)]
 
     qqr /= lpol # Q / sqrt(Q**2 + U**2)
     uur /= lpol # U / sqrt(Q**2 + U**2)
@@ -2083,7 +2109,8 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
 #    ii = (uur < 0)
 #    if True in ii:
 #        ang[ii] = np.pi - ang[ii]
-    ang = calcPolAng(qqr, uur)
+#    ang = calcPolAng(qqr, uur)
+    ang = image.lpa[:,:,ifreq][np.ix_(iix,iiy)]
 
     if turn90:
         ang = ang + np.pi/2.0
@@ -2112,8 +2139,8 @@ def plotPolDir(image=None, arcsec=False, au=False, dpc=None, ifreq=0, cmask_rad=
     vy = vlen * np.sin(ang)
 
     ii = (lpol < 1e-6)
-    vx[ii] = 0.001
-    vy[ii] = 0.001
+    vx[ii] = np.nan
+    vy[ii] = np.nan
 
     # set up axes object
     if ax is None:
@@ -2920,6 +2947,13 @@ def plotImage(image=None, arcsec=False, au=False, log=False, dpc=None, maxlog=No
 
     return {'implot': implot, 'cbar': cbar, 'ax':ax}
 
+def plotImage2(image):
+    """ a new way to plot images
+    image : radmc3dImage or radmc3dCircimage
+
+    """
+    raise ValueError('not done yet')
+    
 def plotChannel(image=None, wavinx=None, chnfig=None, chngrid=None,
     restfreq=None, **kwargs):
     """
@@ -3332,10 +3366,13 @@ def plotSpectrum(image=None, ax=None, pltx='wav', plty='fnu', pltyunit='cgs',
     return {'specplot': ax}
 
     
-def makeImage(circ=False, npix=None, incl=None, wav=None, sizeau=None, phi=None, posang=None, pointau=None,
+def makeImage(circ=False, 
+              npix=None, npixx=None, npixy=None, sizeau=None,  
+              incl=None, phi=None, posang=None, pointau=None,
               fluxcons=True, nostar=False, noscat=False, secondorder=1,
               widthkms=None, linenlam=None, vkms=None, imolspec=None, iline=None,
-              lambdarange=None, nlam=None, loadlambda=False, stokes=False, doppcatch=False,
+              wav=None, lambdarange=None, nlam=None, loadlambda=False, 
+              stokes=False, doppcatch=False,
               maxnrscat=None, nphot_scat=None, 
               binary=False, fname='', 
               tausurf=-1, tracetau=False, tracecolumn=False):
@@ -3441,7 +3478,7 @@ def makeImage(circ=False, npix=None, incl=None, wav=None, sizeau=None, phi=None,
     #
     # The basic keywords that should be set
     #
-    if npix is None:
+    if (npix is None) & (npixx is None) & (npixy is None):
         msg = 'Unkonwn npix. Number of pixels must be set.'
         raise ValueError(msg)
 
@@ -3497,11 +3534,14 @@ def makeImage(circ=False, npix=None, incl=None, wav=None, sizeau=None, phi=None,
         elif tracecolumn:
             com = com + ' tracecolumn'
 
-    com = com + ' npix ' + str(int(npix))
+    if npix is not None:
+        com = com + ' npix ' + str(int(npix))
+    else:
+        com += ' npixx %d npixy %d '%(npixx, npixy)
+
     com = com + ' incl ' + str(incl)
 
-    if sizeau is not None:
-        com = com + ' sizeau ' + str(sizeau)
+    com += ' sizeau ' + str(sizeau)
 
     if wav is not None:
         com = com + ' lambda ' + str(wav)
@@ -3803,10 +3843,7 @@ def writeCameraWavelength(camwav=None, fdir=None, fname='camera_wavelength_micro
     ncamwav = len(camwav)
 
     if fdir is not None:
-        if fdir[-1] is '/':
-            fname = fdir + fname
-        else:
-            fname = fdir + '/' + fname
+        fname = os.path.join(fdir, fname)
 
     with open(fname, 'w') as wfile:
         wfile.write("%d\n" % (ncamwav))
@@ -3865,6 +3902,13 @@ def readTauSurf3D(fname='tausurface_3d.out'):
         # blank space
         dum = rfile.readline()
 
+        data = np.fromfile(rfile, sep=' ', count=-1)
+        data = np.reshape(data, (3,nx,ny,nwav), order='F')
+
+        x = data[0,...]
+        y = data[1,...]
+        z = data[2,...]
+        """ old style
         x = np.zeros([nx, ny, nwav], dtype=np.float64)
         y = np.zeros([nx, ny, nwav], dtype=np.float64)
         z = np.zeros([nx, ny, nwav], dtype=np.float64)
@@ -3875,6 +3919,7 @@ def readTauSurf3D(fname='tausurface_3d.out'):
                     x[ix, iy, iwav] = float(dum[0])
                     y[ix, iy, iwav] = float(dum[1])
                     z[ix, iy, iwav] = float(dum[2])
+        """
 
     return {'nx':nx, 'ny':ny, 'nwav':nwav, 'wav':wav, 
             'x':x, 'y':y,'z':z}
@@ -3930,15 +3975,17 @@ def getTb(im, wav=None, freq=None, bunit='inu', rj=False,
         raise ValueError('bunit does not exist: %s'%bunit)
 
     # convert from intensity to temperature
-    ld2 = wav**2
     hmu = nc.hh * freq
     hmu3_c2 = nc.hh * freq**3 / nc.cc**2
     if rj:
-        tb = wav / 2. / nc.kk * inten
+        tb = wav * 1e-4 / 2. / nc.kk * inten
     else:
-        tb = 0 * inten
-        reg = (inten > 0) & ~np.isnan(inten)
-        tb[reg] = hmu / nc.kk / np.log(2. * hmu3_c2 / (inten[reg] + 1e-90) + 1.)
+        tb = np.zeros_like(inten)
+#        reg = (inten > 0) & ~np.isnan(inten)
+#        tb[reg] = hmu / nc.kk / np.log(2. * hmu3_c2 / (inten[reg] + 1e-90) + 1.)
+
+        reg = ~np.isnan(inten)
+        tb[reg] = hmu / nc.kk / np.log(2. * hmu3_c2 / (abs(inten[reg]) + 1e-90) + 1.) * np.sign(inten[reg])
 
     return tb
 
@@ -4171,7 +4218,7 @@ class radmc3dCircimage(baseImage):
 
                     dum = f.readline().split() # empty line
 
-    def getJyppix(self, dpc):
+    def get_jyppix(self, dpc):
         """
         calculate the jansky per pixel. 
         """

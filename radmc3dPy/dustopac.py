@@ -387,7 +387,7 @@ class radmc3dDustOpac(object):
 
                 # calculate the ksca and phaseg from scatmat
                 if anggrid is not None:
-                    z11dum = np.squeeze(data[:,:,0])
+                    z11dum = data[:,:,0]
                     kkfromz11 = getKscafromZ11(anggrid, z11dum)
                     self.ksca_from_z11.append(kkfromz11)
 
@@ -397,10 +397,7 @@ class radmc3dDustOpac(object):
                 if not old:
                     fname = 'dustkappa_' + ext[i] + '.inp'
                     if fdir is not None:
-                        if fdir[-1] is '/':
-                            fname = fdir + fname
-                        else:
-                            fname = fdir + '/' + fname
+                        fname = os.path.join(fdir, fname)
 
                     print('Reading '+fname)
 
@@ -451,10 +448,7 @@ class radmc3dDustOpac(object):
                 else:
                     fname = 'dustopac_' + ext[i] + '.inp'
                     if fdir is not None:
-                        if fdir[-1] is '/':
-                            fname = fdir + fname
-                        else:
-                            fname = fdir + '/' + fname
+                        fname = os.path.join(fdir, fname)
 
                     print('Reading '+fname)
                     freq = np.fromfile('frequency.inp', count=-1, sep=" ", dtype=np.float64)
@@ -1749,10 +1743,7 @@ class radmc3dDustOpac(object):
             fname = 'dustinfo.inp'
 
         if fdir is not None:
-            if fdir[-1] is '/':
-                fname = fdir + 'dustinfo.inp'
-            else:
-                fname = fdir + '/dustinfo.inp'
+            fname = os.path.join(fdir, fname)
 
         if ext is None:
             raise ValueError('ext must be given when writing to dustinfo.inp')
@@ -1808,10 +1799,7 @@ class radmc3dDustOpac(object):
         """
         fname = 'dustopac.inp'
         if fdir is not None:
-            if fdir[-1] is '/':
-                fname = fdir + fname
-            else:
-                fname = fdir + '/' + fname
+            fname = os.path.join(fdir, fname)
 
         with open(fname, 'r') as rfile:
 
@@ -1882,13 +1870,9 @@ class radmc3dDustOpac(object):
         fdir                : string, optional
                               The name of directory to create this file
         """
-        if fdir is None:
-            fname = 'dustopac.inp'
-        else:
-            if fdir[-1] is '/':
-                fname = fdir + 'dustopac.inp'
-            else:
-                fname = fdir + '/dustopac.inp'
+        fname = 'dustopac.inp'
+        if fdir is not None:
+            fname = os.path.join(fdir, fname)
         print('Writing '+fname)
 
         if not ext:
@@ -1923,9 +1907,9 @@ class radmc3dDustOpac(object):
                     if scattering_mode_max < 5:
                         wfile.write('%-15s %s\n' % ('1', 'Way in which this dust species is read'))
                     else:
-                        if (alignment_mode is 0) | (alignment_mode is False): 
+                        if (alignment_mode == 0) | (alignment_mode is False): 
                             wfile.write('%-15s %s\n' % ('10', 'Way in which this dust species is read'))
-                        elif (alignment_mode is 1) | (alignment_mode is True):
+                        elif (alignment_mode == 1) | (alignment_mode is True):
                             wfile.write('%-15s %s\n' % ('20', 'Way in which this dust species is read'))
                         else:
                             raise ValueError('alignment_mode argument unknown')
@@ -2611,9 +2595,22 @@ def getKscafromZ11(theta, z11):
     """ calculates ksca from z11
     theta : 1d ndarray
             in degrees, increase monotomically
-    z11 : 2d ndarray
-            wavelength by angle
+    z11 : ndarray
+           the last dimension is in theta 
     """
+    mu = np.cos(theta * np.pi / 180.)
+    dmu = np.abs(mu[1:] - mu[:-1])
+    stg = 0.5 * ( z11[...,1:] + z11[...,:-1] )
+
+    dim = z11.shape
+    for ii in range(len(dim) - 1):
+        dmu = dmu[None,:]
+
+    ksca_from_z11 = 2. * np.pi * np.sum(stg * dmu, axis=-1)
+
+    return ksca_from_z11
+
+"""
     nwav, ntheta = z11.shape
     if ntheta != len(theta):
         raise ValueError('inconsistent angle grid with z11')
@@ -2626,6 +2623,7 @@ def getKscafromZ11(theta, z11):
         dum = zav * dmu
         ksca_from_z11[iwav] = dum.sum() * 2. * np.pi
     return ksca_from_z11
+"""
 
 def getPhasegfromZ11(theta, z11):
     """ calculates phaseg from z11
@@ -2633,16 +2631,18 @@ def getPhasegfromZ11(theta, z11):
     look up polarization_total_scattering_opacity subroutine in polarization module in radmc3d
     """
     ksca_from_z11 = getKscafromZ11(theta, z11)
-    nwav, ntheta = z11.shape
 
     mu = np.cos(theta * np.pi / 180.)
-    dmu = np.abs(mu[1:ntheta] - mu[0:ntheta-1])
-    mustg = 0.5 * (mu[1:ntheta] + mu[0:ntheta-1])
-    phaseg_from_z11 = np.zeros([nwav], dtype=np.float64)
-    for iwav in range(nwav):
-        zav = 0.5 * (z11[iwav, 1:ntheta] + z11[iwav, 0:ntheta-1])
-        dum = zav * mustg * dmu
-        phaseg_from_z11[iwav] = dum.sum() * 2. * np.pi / ksca_from_z11[iwav]
+    mus = 0.5 * (mu[1:] + mu[:-1])
+    dmu = np.abs(mu[1:] - mu[:-1])
+    stg = 0.5 * ( z11[...,1:] + z11[...,:-1] )
+
+    dim = z11.shape
+    for ii in range(len(dim) - 1):
+        dmu = dmu[None,:]
+        mus = mus[None,:]
+
+    phaseg_from_z11 = 2. * np.pi * np.sum(stg * mus * dmu, axis=-1) / ksca_from_z11
 
     return phaseg_from_z11
 

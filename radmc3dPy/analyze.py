@@ -1963,7 +1963,7 @@ def plotSlice2D(data=None, var='ddens', plane='xy', crd3=0.0, icrd3=None, ispec=
         plot_y *= ynorm
 
     # if want a mirror across radius. only for spherical coordinates
-    if (mirror is True) and (data.grid.crd_sys is 'sph'):
+    if (mirror is True) and (data.grid.crd_sys == 'sph'):
         plot_x = np.append(plot_x, -plot_x)
         plot_x.sort()
         pdata0 = pdata.copy()
@@ -2293,7 +2293,7 @@ def plotDustOpac(opac=None, var='kabs', idust=0, beck=-1, ax=None, xlabel=None, 
             cutopac[ii] = yii
             
     p = ax.plot(x, y, fmt, **kwargs)
-    if beck is not -1:
+    if beck != -1:
         ax.plot(x, 0.1*(opac.freq[idust]/1e12)**beck, 'g-')
 
     if wavcut is not None:

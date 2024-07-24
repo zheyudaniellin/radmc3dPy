@@ -212,10 +212,7 @@ class radmc3dRadSources(object):
         if fname == '':
             fname = 'stars.inp'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
 
         with open(fname, 'r') as rfile:
 
@@ -314,10 +311,8 @@ class radmc3dRadSources(object):
 
             fname = 'stars.inp'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
+
             print('Writing '+fname)
             with open(fname, 'w') as wfile:
                 wfile.write('%d\n' % 2)
@@ -1185,10 +1180,7 @@ class radmc3dRadSources(object):
         if fname.strip() == '':
             fname = 'external_source.inp'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
 
         # only write this if self.ext_inten is defined
         if self.ext_inten != []:

@@ -840,13 +840,12 @@ class radmc3dData(object):
             if binary:
                 if fname == '':
                     fname = 'dust_temperature.bdat'
-                if fdir is not None:
-                    fname = fdir + '/' + fname
             else:
                 if fname == '': 
                     fname = 'dust_temperature.dat'
-                if fdir is not None:
-                    fname = fdir + '/' + fname
+
+            if fdir is not None:
+                fname = os.path.join(fdir, fname)
 
             print('Reading '+fname)
 
@@ -897,6 +896,9 @@ class radmc3dData(object):
         if binary:
             if fname == '':
                 fname = 'gas_velocity.binp'
+
+            if fdir is not None:
+                fname = os.path.join(fdir, fname)
 
             print('Reading '+fname)
             if os.path.isfile(fname):
@@ -1444,10 +1446,7 @@ class radmc3dData(object):
             else:
                 fname = 'dust_temperature.dat'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
 
         print('Writing ' + fname)
         if octree:
@@ -1519,10 +1518,7 @@ class radmc3dData(object):
             else:
                 fname = 'gas_temperature.inp'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
 
         print('Writing ' + fname)
 
@@ -1550,10 +1546,7 @@ class radmc3dData(object):
         if fname == '':
             fname = 'heatsource.inp'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
 
         vol = self.grid.getCellVolume()
         lum = vol * self.qvis
@@ -1761,10 +1754,8 @@ class radmc3dData(object):
             else:
                 fname = 'microturbulence.inp'
             if fdir is not None:
-                if fdir[-1] is '/':
-                    fname = fdir + fname
-                else:
-                    fname = fdir + '/' + fname
+                fname = os.path.join(fdir, fname)
+
         print('Writing ' + fname)
 
         if octree:
